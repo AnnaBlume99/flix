@@ -64,6 +64,8 @@ object Regions {
 
     case Expression.Float64(_, _) => ().toSuccess
 
+    case Expression.BigDecimal(_, _) => ().toSuccess
+
     case Expression.Int8(_, _) => ().toSuccess
 
     case Expression.Int16(_, _) => ().toSuccess
@@ -75,8 +77,6 @@ object Regions {
     case Expression.BigInt(_, _) => ().toSuccess
 
     case Expression.Str(_, _) => ().toSuccess
-
-    case Expression.Default(_, _) => ().toSuccess
 
     case Expression.Wild(_, _) => ().toSuccess
 
@@ -143,6 +143,17 @@ object Regions {
       val rulesVal = traverse(rules) {
         case MatchRule(pat, guard, body) => flatMapN(visitExp(guard), visitExp(body)) {
           case (g, b) => ().toSuccess
+        }
+      }
+      flatMapN(matchVal, rulesVal) {
+        case (m, rs) => checkType(tpe, loc)
+      }
+
+    case Expression.TypeMatch(exp, rules, tpe, _, _, loc) =>
+      val matchVal = visitExp(exp)
+      val rulesVal = traverse(rules) {
+        case MatchTypeRule(_, _, body) => flatMapN(visitExp(body)) {
+          case b => ().toSuccess
         }
       }
       flatMapN(matchVal, rulesVal) {
@@ -237,6 +248,11 @@ object Regions {
       }
 
     case Expression.Cast(exp, _, _, _, tpe, _, _, loc) =>
+      flatMapN(visitExp(exp)) {
+        case e => checkType(tpe, loc)
+      }
+
+    case Expression.Mask(exp, _, _, tpe, loc) =>
       flatMapN(visitExp(exp)) {
         case e => checkType(tpe, loc)
       }
@@ -407,12 +423,6 @@ object Regions {
       flatMapN(visitExp(exp1), visitExp(exp2), visitExp(exp3)) {
         case (e1, e2, e3) => checkType(tpe, loc)
       }
-
-    case Expression.Debug(exp1, exp2, _, _, tpe, loc) =>
-      flatMapN(visitExp(exp1), visitExp(exp2)) {
-        case (e1, e2) => checkType(tpe, loc)
-      }
-
   }
 
   def visitJvmMethod(method: JvmMethod)(implicit scope: List[Type.Var], flix: Flix): Validation[Unit, CompilationMessage] = method match {

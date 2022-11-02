@@ -19,6 +19,7 @@ import scala.annotation.tailrec
   * Performs safety and well-formedness checks on:
   *  - Datalog constraints
   *  - Anonymous objects
+  *  - TypeMatch expressions
   */
 object Safety {
 
@@ -73,6 +74,8 @@ object Safety {
 
       case Expression.Float64(_, _) => Nil
 
+      case Expression.BigDecimal(_, _) => Nil
+
       case Expression.Int8(_, _) => Nil
 
       case Expression.Int16(_, _) => Nil
@@ -84,8 +87,6 @@ object Safety {
       case Expression.BigInt(_, _) => Nil
 
       case Expression.Str(_, _) => Nil
-
-      case Expression.Default(_, _) => Nil
 
       case Expression.Wild(_, _) => Nil
 
@@ -133,6 +134,17 @@ object Safety {
       case Expression.Match(exp, rules, _, _, _, _) =>
         visit(exp) :::
           rules.flatMap { case MatchRule(_, g, e) => visit(g) ::: visit(e) }
+
+      case Expression.TypeMatch(exp, rules, _, _, _, _) =>
+        // check whether the last case in the type match looks like `...: _`
+        val missingDefault = rules.last match {
+          case MatchTypeRule(_, tpe, _) => tpe match {
+            case Type.Var(sym, _) if renv.isFlexible(sym) => Nil
+            case _ => List(SafetyError.MissingDefaultMatchTypeCase(exp.loc))
+          }
+        }
+        visit(exp) ::: missingDefault :::
+          rules.flatMap { case MatchTypeRule(_, _, e) => visit(e) }
 
       case Expression.Choose(exps, rules, _, _, _, _) =>
         exps.flatMap(visit) :::
@@ -186,6 +198,9 @@ object Safety {
         visit(exp)
 
       case Expression.Cast(exp, _, _, _, _, _, _, _) =>
+        visit(exp)
+
+      case Expression.Mask(exp, _, _, _, _) =>
         visit(exp)
 
       case Expression.Upcast(exp, tpe, loc) =>
@@ -301,10 +316,6 @@ object Safety {
 
       case Expression.ReifyEff(_, exp1, exp2, exp3, _, _, _, _) =>
         visit(exp1) ++ visit(exp2) ++ visit(exp3)
-
-      case Expression.Debug(exp1, exp2, _, _, _, _) =>
-        visit(exp1) ++ visit(exp2)
-
     }
 
     visit(e0)
@@ -569,6 +580,7 @@ object Safety {
     case Pattern.Char(_, _) => Nil
     case Pattern.Float32(_, _) => Nil
     case Pattern.Float64(_, _) => Nil
+    case Pattern.BigDecimal(_, _) => Nil
     case Pattern.Int8(_, _) => Nil
     case Pattern.Int16(_, _) => Nil
     case Pattern.Int32(_, _) => Nil
@@ -593,8 +605,8 @@ object Safety {
       // Case 1: Interface. No need for a constructor.
       List.empty
     } else {
-      // Case 2: Class. Must have a public non-zero argument constructor.
-      if (hasPublicZeroArgConstructor(clazz))
+      // Case 2: Class. Must have a non-private zero argument constructor.
+      if (hasNonPrivateZeroArgConstructor(clazz))
         List.empty
       else
         List(MissingPublicZeroArgConstructor(clazz, loc))
@@ -627,8 +639,9 @@ object Safety {
     val implemented = flixMethods.keySet
 
     val javaMethods = getJavaMethodSignatures(clazz)
+    val objectMethods = getJavaMethodSignatures(classOf[Object]).keySet
     val canImplement = javaMethods.keySet
-    val mustImplement = canImplement.filter(m => isAbstractMethod(javaMethods(m)))
+    val mustImplement = canImplement.filter(m => isAbstractMethod(javaMethods(m)) && !objectMethods.contains(m))
 
     //
     // Check that there are no unimplemented methods.
@@ -676,16 +689,12 @@ object Safety {
   }
 
   /**
-    * Return true if the given `clazz` has public zero argument constructor.
+    * Return true if the given `clazz` has a non-private zero argument constructor.
     */
-  private def hasPublicZeroArgConstructor(clazz: java.lang.Class[_]): Boolean = {
+  private def hasNonPrivateZeroArgConstructor(clazz: java.lang.Class[_]): Boolean = {
     try {
-      // We simply use Class.getConstructor whose documentation states:
-      //
-      // Returns a Constructor object that reflects the specified
-      // public constructor of the class represented by this class object.
-      clazz.getConstructor()
-      true
+      val constructor = clazz.getDeclaredConstructor()
+      !java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())
     } catch {
       case _: NoSuchMethodException => false
     }

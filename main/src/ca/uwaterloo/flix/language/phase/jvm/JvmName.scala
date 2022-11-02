@@ -73,8 +73,10 @@ object JvmName {
   //
 
   val JavaLang: List[String] = List("java", "lang")
+  val JavaUtil: List[String] = List("java", "util")
+  val JavaUtilFunction: List[String] = JavaUtil ::: List("function")
 
-  val AtomicLong: JvmName = JvmName(List("java", "util", "concurrent", "atomic"), "AtomicLong")
+  val AtomicLong: JvmName = JvmName(JavaUtil ::: List("concurrent", "atomic"), "AtomicLong")
   val Boolean: JvmName = JvmName(JavaLang, "Boolean")
   val Byte: JvmName = JvmName(JavaLang, "Byte")
   val Character: JvmName = JvmName(JavaLang, "Character")
@@ -83,7 +85,14 @@ object JvmName {
   val Error: JvmName = JvmName(JavaLang, "Error")
   val Exception: JvmName = JvmName(JavaLang, "Exception")
   val Float: JvmName = JvmName(JavaLang, "Float")
-  val Function: JvmName = JvmName(List("java", "util", "function"), "Function")
+  val IntFunction: JvmName = JvmName(JavaUtilFunction, "IntFunction")
+  val IntUnaryOperator: JvmName = JvmName(JavaUtilFunction, "IntUnaryOperator")
+  val IntPredicate: JvmName = JvmName(JavaUtilFunction, "IntPredicate")
+  val IntConsumer: JvmName = JvmName(JavaUtilFunction, "IntConsumer")
+  val LongFunction: JvmName = JvmName(JavaUtilFunction, "LongFunction")
+  val LongUnaryOperator: JvmName = JvmName(JavaUtilFunction, "LongUnaryOperator")
+  val LongPredicate: JvmName = JvmName(JavaUtilFunction, "LongPredicate")
+  val LongConsumer: JvmName = JvmName(JavaUtilFunction, "LongConsumer")
   val Integer: JvmName = JvmName(JavaLang, "Integer")
   val Long: JvmName = JvmName(JavaLang, "Long")
   val Math: JvmName = JvmName(JavaLang, "Math")
@@ -99,11 +108,6 @@ object JvmName {
 
   val DevFlixRuntime: List[String] = List("dev", "flix", "runtime")
 
-  val ProxyObject: JvmName = JvmName(DevFlixRuntime, "ProxyObject")
-  val SelectChoice: JvmName = JvmName(List("ca", "uwaterloo", "flix", "runtime", "interpreter"), "SelectChoice")
-
-  // Deprecated: Should not be used in new code.
-  val Channel: JvmName = JvmName(List("ca", "uwaterloo", "flix", "runtime", "interpreter"), "Channel")
 }
 
 /**

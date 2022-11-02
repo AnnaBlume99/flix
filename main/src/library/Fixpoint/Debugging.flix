@@ -13,17 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use Fixpoint/Ast.Datalog
-use Fixpoint/Ram.RamStmt
-use Fixpoint/Shared.PredSym
 
 namespace Fixpoint {
+
+    use Fixpoint/Ast.Datalog
+    use Fixpoint/Ram.RamStmt
+    use Fixpoint/Shared.PredSym
 
     ///
     /// Invoked before the fixpoint computation.
     ///
     @Internal
-    pub def notifyPreSolve(d: Datalog[v], _stf: Map[PredSym, Int32]): Unit \ IO with Order[v], ToString[v] = {
+    pub def notifyPreSolve(d: Datalog[v], _stf: Map[PredSym, Int32]): Unit \ IO with Order[v] = {
         if (enableDebugging()) {
             println(String.repeat(80, "*"));
             println("** Datalog Input");
@@ -38,7 +39,7 @@ namespace Fixpoint {
     /// Invoked with the minimal model of the fixpoint computation.
     ///
     @Internal
-    pub def notifyPostSolve(d: Datalog[v]): Unit \ IO with Order[v], ToString[v] = {
+    pub def notifyPostSolve(d: Datalog[v]): Unit \ IO with Order[v] = {
         if (enableDebugging()) {
             println(String.repeat(80, "*"));
             println("** Minimal Model");
@@ -53,7 +54,7 @@ namespace Fixpoint {
     /// Invoked before the fixpoint computation.
     ///
     @Internal
-    pub def notifyPreInterpret(s: RamStmt[v]): Unit \ IO with Order[v], ToString[v] = {
+    pub def notifyPreInterpret(s: RamStmt[v]): Unit \ IO with Order[v] = {
         if (enableDebugging()) {
             println(String.repeat(80, "*"));
             println("** Relation Algebra Machine AST");

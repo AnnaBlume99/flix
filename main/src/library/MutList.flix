@@ -49,7 +49,7 @@ namespace MutList {
     /// Returns a new empty mutable list with a default capacity.
     ///
     pub def new(r: Region[r]): MutList[a, r] \ Write(r) =
-        MutList(ref ([$DEFAULT$; minCapacity()] @ r) @ r, ref 0 @ r)
+        MutList(ref ([Reflect.default(); minCapacity()] @ r) @ r, ref 0 @ r)
 
     ///
     /// Returns a mutable list of all integers between `b` (inclusive) and `e` (exclusive).
@@ -60,7 +60,7 @@ namespace MutList {
         let minCap = minCapacity();
         let d = e - b;
         let c = Order.max(d, minCap);
-        let f = i -> { let x = b + i; if (x < e) x else $DEFAULT$ };
+        let f = i -> { let x = b + i; if (x < e) x else Reflect.default() };
         MutList(ref Array.init(r, f, c) @ r, ref d @ r)
 
     ///
@@ -379,7 +379,7 @@ namespace MutList {
     ///
     /// Returns the result of applying `f` to every element in `v` along with that element's index.
     ///
-    pub def mapWithIndex(f: (a, Int32) -> b \ ef, v: MutList[a, r]): MutList[b, r] \ { ef, Read(r), Write(r) } =
+    pub def mapWithIndex(f: (Int32, a) -> b \ ef, v: MutList[a, r]): MutList[b, r] \ { ef, Read(r), Write(r) } =
         let r = Scoped.regionOf(v);
         if (isEmpty(v))
             new MutList(r)
@@ -387,13 +387,13 @@ namespace MutList {
             let MutList(ra, rl) = v;
             let a = deref ra;
             let l = deref rl;
-            let x = f(a[0], 0);
+            let x = f(0, a[0]);
             let b = [x; Array.length(a)] @ r;
             def loop(i) = {
                 if (i >= l)
                     ()
                 else {
-                    b[i] = f(a[i], i);
+                    b[i] = f(i, a[i]);
                     loop(i + 1)
                 }
             };
@@ -421,7 +421,7 @@ namespace MutList {
     ///
     /// Apply `f` to every element in `v` along with that element's index.
     ///
-    pub def transformWithIndex!(f: (a, Int32) -> a, v: MutList[a, r]): Unit \ Read(r) =
+    pub def transformWithIndex!(f: (Int32, a) -> a, v: MutList[a, r]): Unit \ Read(r) =
         let MutList(ra, rl) = v;
         let a = deref ra;
         let l = deref rl;
@@ -429,7 +429,7 @@ namespace MutList {
             if (i >= l)
                 ()
             else {
-                a[i] = f(a[i], i);
+                a[i] = f(i, a[i]);
                 loop(i + 1)
             }
         };
@@ -527,7 +527,7 @@ namespace MutList {
     ///
     pub def clear!(v: MutList[a, r]): Unit \ { Read(r), Write(r) } =
         let MutList(a, l) = v;
-        a := [$DEFAULT$; Array.length(deref a)] @ Scoped.regionOf(v);
+        a := [Reflect.default(); Array.length(deref a)] @ Scoped.regionOf(v);
         l := 0
 
     ///
@@ -552,7 +552,7 @@ namespace MutList {
         if (len > 0)
             let last = (deref a)[len - 1];
             l := len - 1;
-            Array.put($DEFAULT$, len - 1, deref a);
+            Array.put(Reflect.default(), len - 1, deref a);
             compress!(v);
             Some(last)
         else
@@ -606,7 +606,7 @@ namespace MutList {
                 loop(i1 + 1)
             }
             else if (i1 == n) {
-                a[i1] = $DEFAULT$
+                a[i1] = Reflect.default()
             }
             else
                 ()
@@ -709,7 +709,7 @@ namespace MutList {
             let minCap = minCapacity();
             let c = Order.max(l, minCap);
             l0 := l;
-            Array.updateSequence!(0, deref a, [$DEFAULT$; c] @ Scoped.regionOf(v))
+            Array.updateSequence!(0, deref a, [Reflect.default(); c] @ Scoped.regionOf(v))
         }
         else
             ()
@@ -785,7 +785,7 @@ namespace MutList {
     ///
     pub def joinWith(f: a -> String \ ef, sep: String, v: MutList[a, r]): String \ { ef, Read(r) } = region r1 {
         let sb = new StringBuilder(r1);
-        let step = (x, i) ->
+        let step = (i, x) ->
             if (i == 0)
                 StringBuilder.appendString!(f(x), sb)
             else {
@@ -833,7 +833,7 @@ namespace MutList {
     ///
     /// Applies `f` to all the elements in `v`.
     ///
-    pub def foreachWithIndex(f: (a, Int32) -> Unit \ ef, v: MutList[a, r]): Unit \ { ef, Read(r) } =
+    pub def foreachWithIndex(f: (Int32, a) -> Unit \ ef, v: MutList[a, r]): Unit \ { ef, Read(r) } =
         let MutList(ra, rl) = v;
         let a = deref ra;
         let l = deref rl;
@@ -841,7 +841,7 @@ namespace MutList {
             if (i >= l)
                 ()
             else {
-                f(a[i], i);
+                f(i, a[i]);
                 loop(i + 1)
             }
         };

@@ -40,6 +40,8 @@ object TypedAstOps {
 
       case Expression.Float64(lit, loc) => Map.empty
 
+      case Expression.BigDecimal(lit, loc) => Map.empty
+
       case Expression.Int8(lit, loc) => Map.empty
 
       case Expression.Int16(lit, loc) => Map.empty
@@ -51,8 +53,6 @@ object TypedAstOps {
       case Expression.BigInt(lit, loc) => Map.empty
 
       case Expression.Str(lit, loc) => Map.empty
-
-      case Expression.Default(tpe, loc) => Map.empty
 
       case Expression.Lambda(fparam, exp, tpe, loc) =>
         val env1 = Map(fparam.sym -> fparam.tpe)
@@ -97,6 +97,13 @@ object TypedAstOps {
         rules.foldLeft(m) {
           case (macc, MatchRule(pat, guard, exp)) =>
             macc ++ visitExp(guard, env0) ++ visitExp(exp, binds(pat) ++ env0)
+        }
+
+      case Expression.TypeMatch(matchExp, rules, _, _, _, _) =>
+        val m = visitExp(matchExp, env0)
+        rules.foldLeft(m) {
+          case (macc, MatchTypeRule(sym, tpe, exp)) =>
+            macc ++ visitExp(exp, Map(sym -> tpe) ++ env0)
         }
 
       case Expression.Choose(exps, rules, _, _, _, _) =>
@@ -166,6 +173,9 @@ object TypedAstOps {
         visitExp(exp, env0)
 
       case Expression.Cast(exp, _, _, _, _, _, _, _) =>
+        visitExp(exp, env0)
+
+      case Expression.Mask(exp, _, _, _, _) =>
         visitExp(exp, env0)
 
       case Expression.Upcast(exp, _, _) =>
@@ -283,9 +293,6 @@ object TypedAstOps {
       case Expression.ReifyEff(_, exp1, exp2, exp3, _, _, _, _) =>
         visitExp(exp1, env0) ++ visitExp(exp2, env0) ++ visitExp(exp3, env0)
 
-      case Expression.Debug(exp1, exp2, _, _, _, _) =>
-        visitExp(exp1, env0) ++ visitExp(exp2, env0)
-
     }
 
     /**
@@ -342,6 +349,7 @@ object TypedAstOps {
     case Pattern.Char(lit, loc) => Map.empty
     case Pattern.Float32(lit, loc) => Map.empty
     case Pattern.Float64(lit, loc) => Map.empty
+    case Pattern.BigDecimal(lit, loc) => Map.empty
     case Pattern.Int8(lit, loc) => Map.empty
     case Pattern.Int16(lit, loc) => Map.empty
     case Pattern.Int32(lit, loc) => Map.empty
@@ -379,13 +387,13 @@ object TypedAstOps {
     case Expression.Char(_, _) => Set.empty
     case Expression.Float32(_, _) => Set.empty
     case Expression.Float64(_, _) => Set.empty
+    case Expression.BigDecimal(_, _) => Set.empty
     case Expression.Int8(_, _) => Set.empty
     case Expression.Int16(_, _) => Set.empty
     case Expression.Int32(_, _) => Set.empty
     case Expression.Int64(_, _) => Set.empty
     case Expression.BigInt(_, _) => Set.empty
     case Expression.Str(_, _) => Set.empty
-    case Expression.Default(_, _) => Set.empty
     case Expression.Wild(_, _) => Set.empty
     case Expression.Var(_, _, _) => Set.empty
     case Expression.Def(_, _, _) => Set.empty
@@ -403,6 +411,7 @@ object TypedAstOps {
     case Expression.Stm(exp1, exp2, _, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.Discard(exp, _, _, _) => sigSymsOf(exp)
     case Expression.Match(exp, rules, _, _, _, _) => sigSymsOf(exp) ++ rules.flatMap(rule => sigSymsOf(rule.exp) ++ sigSymsOf(rule.guard))
+    case Expression.TypeMatch(exp, rules, _, _, _, _) => sigSymsOf(exp) ++ rules.flatMap(rule => sigSymsOf(rule.exp))
     case Expression.Choose(exps, rules, _, _, _, _) => exps.flatMap(sigSymsOf).toSet ++ rules.flatMap(rule => sigSymsOf(rule.exp))
     case Expression.Tag(_, exp, _, _, _, _) => sigSymsOf(exp)
     case Expression.Tuple(elms, _, _, _, _) => elms.flatMap(sigSymsOf).toSet
@@ -421,6 +430,7 @@ object TypedAstOps {
     case Expression.Assign(exp1, exp2, _, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
     case Expression.Ascribe(exp, _, _, _, _) => sigSymsOf(exp)
     case Expression.Cast(exp, _, _, _, _, _, _, _) => sigSymsOf(exp)
+    case Expression.Mask(exp, _, _, _, _) => sigSymsOf(exp)
     case Expression.Upcast(exp, _, _) => sigSymsOf(exp)
     case Expression.Without(exp, _, _, _, _, _) => sigSymsOf(exp)
     case Expression.TryCatch(exp, rules, _, _, _, _) => sigSymsOf(exp) ++ rules.flatMap(rule => sigSymsOf(rule.exp))
@@ -453,7 +463,6 @@ object TypedAstOps {
     case Expression.Reify(_, _, _, _, _) => Set.empty
     case Expression.ReifyType(_, _, _, _, _, _) => Set.empty
     case Expression.ReifyEff(_, exp1, exp2, exp3, _, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2) ++ sigSymsOf(exp3)
-    case Expression.Debug(exp1, exp2, _, _, _, _) => sigSymsOf(exp1) ++ sigSymsOf(exp2)
   }
 
   /**
@@ -499,6 +508,8 @@ object TypedAstOps {
 
     case Expression.Float64(_, _) => Map.empty
 
+    case Expression.BigDecimal(_, _) => Map.empty
+
     case Expression.Int8(_, _) => Map.empty
 
     case Expression.Int16(_, _) => Map.empty
@@ -510,8 +521,6 @@ object TypedAstOps {
     case Expression.BigInt(_, _) => Map.empty
 
     case Expression.Str(_, _) => Map.empty
-
-    case Expression.Default(_, _) => Map.empty
 
     case Expression.Wild(_, _) => Map.empty
 
@@ -561,6 +570,11 @@ object TypedAstOps {
     case Expression.Match(exp, rules, _, _, _, _) =>
       rules.foldLeft(freeVars(exp)) {
         case (acc, MatchRule(pat, guard, exp)) => acc ++ (freeVars(guard) ++ freeVars(exp)) -- freeVars(pat).keys
+      }
+
+    case Expression.TypeMatch(exp, rules, _, _, _, _) =>
+      rules.foldLeft(freeVars(exp)) {
+        case (acc, MatchTypeRule(sym, _, exp)) => acc ++ (freeVars(exp) - sym)
       }
 
     case Expression.Choose(exps, rules, _, _, _, _) =>
@@ -627,6 +641,9 @@ object TypedAstOps {
       freeVars(exp)
 
     case Expression.Cast(exp, _, _, _, _, _, _, _) =>
+      freeVars(exp)
+
+    case Expression.Mask(exp, _, _, _, _) =>
       freeVars(exp)
 
     case Expression.Upcast(exp, _, _) =>
@@ -738,10 +755,6 @@ object TypedAstOps {
 
     case Expression.ReifyEff(sym, exp1, exp2, exp3, _, _, _, _) =>
       (freeVars(exp1) ++ freeVars(exp2) ++ freeVars(exp3)) - sym
-
-    case Expression.Debug(exp1, exp2, _, _, _, _) =>
-      freeVars(exp1) ++ freeVars(exp2)
-
   }
 
   /**
@@ -756,6 +769,7 @@ object TypedAstOps {
     case Pattern.Char(_, _) => Map.empty
     case Pattern.Float32(_, _) => Map.empty
     case Pattern.Float64(_, _) => Map.empty
+    case Pattern.BigDecimal(_, _) => Map.empty
     case Pattern.Int8(_, _) => Map.empty
     case Pattern.Int16(_, _) => Map.empty
     case Pattern.Int32(_, _) => Map.empty

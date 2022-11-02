@@ -87,13 +87,13 @@ object Statistics {
       case Expression.Char(lit, loc) => Counter.empty
       case Expression.Float32(lit, loc) => Counter.empty
       case Expression.Float64(lit, loc) => Counter.empty
+      case Expression.BigDecimal(lit, loc) => Counter.empty
       case Expression.Int8(lit, loc) => Counter.empty
       case Expression.Int16(lit, loc) => Counter.empty
       case Expression.Int32(lit, loc) => Counter.empty
       case Expression.Int64(lit, loc) => Counter.empty
       case Expression.BigInt(lit, loc) => Counter.empty
       case Expression.Str(lit, loc) => Counter.empty
-      case Expression.Default(tpe, loc) => Counter.empty
       case Expression.Wild(tpe, loc) => Counter.empty
       case Expression.Var(sym, tpe, loc) => Counter.empty
       case Expression.Def(sym, tpe, loc) => Counter.empty
@@ -111,6 +111,7 @@ object Statistics {
       case Expression.Stm(exp1, exp2, tpe, pur, eff, loc) => visitExp(exp1) ++ visitExp(exp2)
       case Expression.Discard(exp, pur, eff, loc) => visitExp(exp)
       case Expression.Match(exp, rules, tpe, pur, eff, loc) => visitExp(exp) ++ Counter.merge(rules.map(visitMatchRule))
+      case Expression.TypeMatch(exp, rules, tpe, pur, eff, loc) => visitExp(exp) ++ Counter.merge(rules.map(visitMatchTypeRule))
       case Expression.Choose(exps, rules, tpe, pur, eff, loc) => Counter.merge(exps.map(visitExp)) ++ Counter.merge(rules.map(visitChoiceRule))
       case Expression.Tag(sym, exp, tpe, pur, eff, loc) => visitExp(exp)
       case Expression.Tuple(elms, tpe, pur, eff, loc) => Counter.merge(elms.map(visitExp))
@@ -129,6 +130,7 @@ object Statistics {
       case Expression.Assign(exp1, exp2, tpe, pur, eff, loc) => visitExp(exp1) ++ visitExp(exp2)
       case Expression.Ascribe(exp, tpe, pur, eff, loc) => visitExp(exp)
       case Expression.Cast(exp, _, _, _, tpe, pur, eff, loc) => visitExp(exp)
+      case Expression.Mask(exp, tpe, pur, eff, loc) => visitExp(exp)
       case Expression.Upcast(exp, _, _) => visitExp(exp)
       case Expression.Without(exp, _, _, _, _, _) => visitExp(exp)
       case Expression.TryCatch(exp, rules, tpe, pur, eff, loc) => visitExp(exp) ++ Counter.merge(rules.map(visitCatchRule))
@@ -161,7 +163,6 @@ object Statistics {
       case Expression.Reify(t, tpe, pur, eff, loc) => Counter.empty
       case Expression.ReifyType(t, k, tpe, pur, eff, loc) => Counter.empty
       case Expression.ReifyEff(sym, exp1, exp2, exp3, tpe, pur, eff, loc) => visitExp(exp1) ++ visitExp(exp2) ++ visitExp(exp3)
-      case Expression.Debug(exp1, exp2, tpe, pur, eff, loc) => visitExp(exp1) ++ visitExp(exp2)
     }
 
     base ++ subExprs
@@ -172,6 +173,13 @@ object Statistics {
     */
   private def visitMatchRule(rule: MatchRule): Counter = rule match {
     case MatchRule(pat, guard, exp) => visitExp(guard) ++ visitExp(exp)
+  }
+
+  /**
+    * Counts AST nodes in the given rule.
+    */
+  private def visitMatchTypeRule(rule: MatchTypeRule): Counter = rule match {
+    case MatchTypeRule(_, _, exp) => visitExp(exp)
   }
 
   /**

@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use Fixpoint.PredSymsOf
-use Fixpoint.SubstitutePredSym
-use Fixpoint/Shared.PredSym
-use ToString.toString
 
 namespace Fixpoint/Ast {
+
+    use Fixpoint.PredSymsOf
+    use Fixpoint.SubstitutePredSym
+    use Fixpoint/Shared.PredSym
+    use ToString.toString
 
     @Internal
     pub enum BodyPredicate[v] {
@@ -48,7 +49,7 @@ namespace Fixpoint/Ast {
         }
     }
 
-    instance ToString[BodyPredicate[v]] with ToString[v] {
+    instance ToString[BodyPredicate[v]] {
         pub def toString(body: BodyPredicate[v]): String =
             def polarityPrefix(p) = match p {
                 case Negative => "not "

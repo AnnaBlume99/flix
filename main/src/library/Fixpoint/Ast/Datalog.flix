@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use Fixpoint.PredSymsOf
-use Fixpoint/PredSymsOf.predSymsOf
-use Fixpoint.SubstitutePredSym
-use Fixpoint/SubstitutePredSym.substitute
-use Fixpoint/Tuple.Tuple
-use Fixpoint/Shared.PredSym
-use Fixpoint/Ram.RamSym
 
 namespace Fixpoint/Ast {
+
+    use Fixpoint.PredSymsOf
+    use Fixpoint/PredSymsOf.predSymsOf
+    use Fixpoint.SubstitutePredSym
+    use Fixpoint/SubstitutePredSym.substitute
+    use Fixpoint/Tuple.Tuple
+    use Fixpoint/Shared.PredSym
+    use Fixpoint/Ram.RamSym
 
     @Internal
     pub enum Datalog[v] {
@@ -57,7 +58,7 @@ namespace Fixpoint/Ast {
         }
     }
 
-    instance ToString[Datalog[v]] with ToString[v] {
+    instance ToString[Datalog[v]] {
         pub def toString(cs: Datalog[v]): String = match cs {
             case Datalog(facts, rules) => region r {
                 let sb = new StringBuilder(r);
@@ -71,10 +72,12 @@ namespace Fixpoint/Ast {
                 let sb = new StringBuilder(r);
                 Map.foreach(ramSym -> rel -> match toDenotation(ramSym) {
                     case Relational => Map.foreach((tuple, _) -> {
-                        StringBuilder.appendLine!("${ramSym}(${List.join(", ", Fixpoint/Tuple.toList(tuple))}).", sb)
+                        let tupleString = Fixpoint/Tuple.toList(tuple) |> List.map(stringify) |> List.join(", ");
+                        StringBuilder.appendLine!("${ramSym}(${tupleString}).", sb)
                     }, rel)
                     case Latticenal(_) => Map.foreach((tuple, lat) -> {
-                        StringBuilder.appendLine!("${ramSym}(${List.join(", ", Fixpoint/Tuple.toList(tuple))}; ${lat}).", sb)
+                        let tupleString = Fixpoint/Tuple.toList(tuple) |> List.map(stringify) |> List.join(", ");
+                        StringBuilder.appendLine!("${ramSym}(${tupleString}; ${stringify(lat)}).", sb)
                     }, rel)
                 }, db);
                 StringBuilder.toString(sb)

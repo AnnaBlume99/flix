@@ -14,67 +14,79 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+ 
+ namespace TestChannel {
 
-@test
-def testNew01(): Concurrent/Channel.Mpmc \ IO = Concurrent/Channel.new(0)
+    use Concurrent/Channel.Mpmc
+    use Concurrent/Channel.unsafeGetAndUnlock
+    use Concurrent/Channel.get
+    use Concurrent/Channel.mpmcAdmin
+    use Concurrent/Channel.newChannel
+    use Concurrent/Channel.put
+    use Concurrent/Channel.selectFrom
 
-@test
-def testNew02(): Concurrent/Channel.Mpmc \ IO = Concurrent/Channel.new(32)
+    @test
+    def testNew01(): Mpmc[Int32] \ IO = newChannel(0)
 
-@test
-def testGetPut01(): Bool \ IO =
-    let c = Concurrent/Channel.new(1);
-    Concurrent/Channel.put(BoxedBool(true), c);
-    match Concurrent/Channel.get(c) {
-        case BoxedBool(b) => b
-        case _ => false
-    }
+    @test
+    def testNew02(): Mpmc[Result[String, a]] \ IO = newChannel(32)
 
-@test
-def testGetPut02(): Bool \ IO =
-    let c = Concurrent/Channel.new(1);
-    Concurrent/Channel.put(BoxedInt32(123), c);
-    match Concurrent/Channel.get(c) {
-        case BoxedInt32(i) => i == 123
-        case _ => bug!("Impossible")
-    }
+    @test
+    def testGetPut01(): Bool \ IO =
+        let c = newChannel(1);
+        put(true, c);
+        get(c)
 
-@test
-def testGetPut03(): Bool \ IO =
-    let c = Concurrent/Channel.new(1);
-    Concurrent/Channel.put(BoxedValue("Hello World!" as ##java.lang.Object), c);
-    match Concurrent/Channel.get(c) {
-        case BoxedValue(s) => (s as String) == "Hello World!"
-        case _ => bug!("Impossible")
-    }
+    @test
+    def testGetPut02(): Bool \ IO =
+        let c = newChannel(1);
+        put(123, c);
+        get(c) == 123
 
-@test
-def testSelect01(): Bool \ IO =
-    let c = Concurrent/Channel.new(1);
-    Concurrent/Channel.put(BoxedInt32(2), c);
-    match Concurrent/Channel.select([c], false) {
-        case Some(0, BoxedInt32(i)) => i == 2
-        case _ => bug!("impossible")
-    }
+    @test
+    def testGetPut03(): Bool \ IO =
+        let c = newChannel(1);
+        put("Hello World!", c);
+        get(c) == "Hello World!"
 
-@test
-def testSelect02(): Bool \ IO =
-    let c = Concurrent/Channel.new(1);
-    match Concurrent/Channel.select([c], true) {
-        case Some(0, BoxedInt32(_)) => bug!("The channel should be empty")
-        case None => true
-        case _ => bug!("impossible")
-    }
+    @test
+    def testSelect01(): Bool \ IO =
+        let c = newChannel(1);
+        put(2, c);
+        match selectFrom([mpmcAdmin(c)], true) {
+            case (0, locks) =>
+                let i = unsafeGetAndUnlock(c, locks);
+                i == 2
+            case _ => unreachable!()
+        }
 
-@test
-def testSelect03(): Bool \ IO =
-    let cString = Concurrent/Channel.new(10);
-    let cInt = Concurrent/Channel.new(0);
+    @test
+    def testSelect02(): Bool \ IO =
+        let c = newChannel(1);
+        match selectFrom([mpmcAdmin(c)], false) {
+            case (0, locks) =>
+                let _ = unsafeGetAndUnlock(c, locks);
+                false
+            case (-1, _) =>
+                true
+            case _ => unreachable!()
+        }
 
-    Concurrent/Channel.put(BoxedValue("hey" as ##java.lang.Object), cString);
+    @test
+    def testSelect03(): Bool \ IO =
+        let c1: Mpmc[Int32] = newChannel(0);
+        let c2: Mpmc[String] = newChannel(10);
 
-    match Concurrent/Channel.select([cInt, cString], false) {
-        case Some(0, BoxedInt32(_)) => bug!("The channel should be empty")
-        case Some(1, BoxedValue(o)) => let s = o as String; s == "hey"
-        case _ => bug!("impossible")
-    }
+        put("hey", c2);
+
+        match selectFrom([mpmcAdmin(c1), mpmcAdmin(c2)], true) {
+            case (0, locks) =>
+                let _ = unsafeGetAndUnlock(c1, locks);
+                bug!("The channel should be empty")
+            case (1, locks) =>
+                let s = unsafeGetAndUnlock(c2, locks);
+                s == "hey"
+            case _ => unreachable!()
+        }
+
+}

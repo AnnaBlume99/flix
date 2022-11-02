@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use Fixpoint.PredSymsOf
-use Fixpoint.SubstitutePredSym
-use Fixpoint/Shared.PredSym
 
 namespace Fixpoint/Ast {
+
+    use Fixpoint.PredSymsOf
+    use Fixpoint.SubstitutePredSym
+    use Fixpoint/Shared.PredSym
 
     @Internal
     pub enum HeadPredicate[v] {
@@ -38,7 +39,7 @@ namespace Fixpoint/Ast {
         }
     }
 
-    instance ToString[HeadPredicate[v]] with ToString[v] {
+    instance ToString[HeadPredicate[v]] {
         pub def toString(head: HeadPredicate[v]): String =
             match head {
                 case HeadAtom(predSym, Relational, terms) => "${predSym}(${terms |> List.join(", ")})"

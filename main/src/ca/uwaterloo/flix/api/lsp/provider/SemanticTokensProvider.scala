@@ -301,6 +301,8 @@ object SemanticTokensProvider {
 
     case Expression.Float64(_, _) => Iterator.empty
 
+    case Expression.BigDecimal(_, _) => Iterator.empty
+
     case Expression.Int8(_, _) => Iterator.empty
 
     case Expression.Int16(_, _) => Iterator.empty
@@ -312,8 +314,6 @@ object SemanticTokensProvider {
     case Expression.BigInt(_, _) => Iterator.empty
 
     case Expression.Str(_, _) => Iterator.empty
-
-    case Expression.Default(_, _) => Iterator.empty
 
     case Expression.Lambda(fparam, exp, _, _) =>
       visitFormalParam(fparam) ++ visitExp(exp)
@@ -359,6 +359,15 @@ object SemanticTokensProvider {
       rules.foldLeft(m) {
         case (acc, MatchRule(pat, guard, exp)) =>
           acc ++ visitPat(pat) ++ visitExp(guard) ++ visitExp(exp)
+      }
+
+    case Expression.TypeMatch(matchExp, rules, _, _, _, _) =>
+      val m = visitExp(matchExp)
+      rules.foldLeft(m) {
+        case (acc, MatchTypeRule(sym, tpe, exp)) =>
+          val o = getSemanticTokenType(sym, tpe)
+          val t = SemanticToken(o, Nil, sym.loc)
+          acc ++ Iterator(t) ++ visitType(tpe) ++ visitExp(exp)
       }
 
     case Expression.Choose(exps, rules, tpe, eff, loc, _) =>
@@ -417,6 +426,9 @@ object SemanticTokensProvider {
 
     case Expression.Cast(exp, _, _, _, tpe, _, _, _) =>
       visitExp(exp) ++ visitType(tpe)
+
+    case Expression.Mask(exp, _, _, _, _) =>
+      visitExp(exp)
 
     case Expression.Upcast(exp, tpe, _) =>
       visitExp(exp) ++ visitType(tpe)
@@ -537,9 +549,6 @@ object SemanticTokensProvider {
       val o = getSemanticTokenType(sym, exp1.tpe)
       val t = SemanticToken(o, Nil, sym.loc)
       Iterator(t) ++ visitExp(exp1) ++ visitExp(exp2) ++ visitExp(exp3)
-
-    case Expression.Debug(exp1, exp2, _, _, _, _) =>
-      visitExp(exp1) ++ visitExp(exp2)
   }
 
   /**
@@ -572,6 +581,8 @@ object SemanticTokensProvider {
     case Pattern.Float32(_, _) => Iterator.empty
 
     case Pattern.Float64(_, _) => Iterator.empty
+
+    case Pattern.BigDecimal(_, _) => Iterator.empty
 
     case Pattern.Int8(_, _) => Iterator.empty
 
@@ -638,6 +649,7 @@ object SemanticTokensProvider {
     case TypeConstructor.Char => true
     case TypeConstructor.Float32 => true
     case TypeConstructor.Float64 => true
+    case TypeConstructor.BigDecimal => true
     case TypeConstructor.Int8 => true
     case TypeConstructor.Int16 => true
     case TypeConstructor.Int32 => true

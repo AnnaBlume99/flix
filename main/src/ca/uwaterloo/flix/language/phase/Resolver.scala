@@ -17,7 +17,8 @@
 package ca.uwaterloo.flix.language.phase
 
 import ca.uwaterloo.flix.api.Flix
-import ca.uwaterloo.flix.language.ast.Ast.{BoundBy, Denotation}
+import ca.uwaterloo.flix.language.ast.Ast.BoundBy
+import ca.uwaterloo.flix.language.ast.UnkindedType.{mkAnd, mkComplement, mkEffect, mkEnum, mkIntersection, mkNot, mkOr, mkPredicate, mkUncurriedArrowWithEffect, mkUnion}
 import ca.uwaterloo.flix.language.ast.{Symbol, _}
 import ca.uwaterloo.flix.language.errors.ResolutionError
 import ca.uwaterloo.flix.util.Validation._
@@ -41,6 +42,14 @@ object Resolver {
   private val HashSym = new Symbol.ClassSym(Nil, "Hash", SourceLocation.Unknown)
 
   val DerivableSyms: List[Symbol.ClassSym] = List(BoxableSym, EqSym, OrderSym, ToStringSym, HashSym)
+
+  /**
+    * Java classes for primitives and Object
+    */
+  private val Int = classOf[Int]
+  private val Long = classOf[Long]
+  private val Boolean = classOf[Boolean]
+  private val Object = classOf[AnyRef]
 
   /**
     * Performs name resolution on the given program `root`.
@@ -626,6 +635,8 @@ object Resolver {
 
         case NamedAst.Expression.Float64(lit, loc) => ResolvedAst.Expression.Float64(lit, loc).toSuccess
 
+        case NamedAst.Expression.BigDecimal(lit, loc) => ResolvedAst.Expression.BigDecimal(lit, loc).toSuccess
+
         case NamedAst.Expression.Int8(lit, loc) => ResolvedAst.Expression.Int8(lit, loc).toSuccess
 
         case NamedAst.Expression.Int16(lit, loc) => ResolvedAst.Expression.Int16(lit, loc).toSuccess
@@ -637,8 +648,6 @@ object Resolver {
         case NamedAst.Expression.BigInt(lit, loc) => ResolvedAst.Expression.BigInt(lit, loc).toSuccess
 
         case NamedAst.Expression.Str(lit, loc) => ResolvedAst.Expression.Str(lit, loc).toSuccess
-
-        case NamedAst.Expression.Default(loc) => ResolvedAst.Expression.Default(loc).toSuccess
 
         case app@NamedAst.Expression.Apply(NamedAst.Expression.DefOrSig(qname, env, innerLoc), exps, outerLoc) =>
           flatMapN(lookupDefOrSig(qname, ns0, env, root)) {
@@ -727,6 +736,22 @@ object Resolver {
           val rsVal = rulesVal
           mapN(eVal, rsVal) {
             case (e, rs) => ResolvedAst.Expression.Match(e, rs, loc)
+          }
+
+        case NamedAst.Expression.TypeMatch(exp, rules, loc) =>
+          val rulesVal = traverse(rules) {
+            case NamedAst.MatchTypeRule(sym, tpe, body) =>
+              val tVal = resolveType(tpe, taenv, ns0, root)
+              val bVal = visitExp(body, region)
+              mapN(tVal, bVal) {
+                case (t, b) => ResolvedAst.MatchTypeRule(sym, t, b)
+              }
+          }
+
+          val eVal = visitExp(exp, region)
+          val rsVal = rulesVal
+          mapN(eVal, rsVal) {
+            case (e, rs) => ResolvedAst.Expression.TypeMatch(e, rs, loc)
           }
 
         case NamedAst.Expression.Choose(star, exps, rules, loc) =>
@@ -934,6 +959,12 @@ object Resolver {
             case (e, t, f) => ResolvedAst.Expression.Cast(e, t, f, loc)
           }
 
+        case NamedAst.Expression.Mask(exp, loc) =>
+          val eVal = visitExp(exp, region)
+          mapN(eVal) {
+            case e => ResolvedAst.Expression.Mask(e, loc)
+          }
+
         case NamedAst.Expression.Upcast(exp, loc) =>
           mapN(visitExp(exp, region)) {
             case e => ResolvedAst.Expression.Upcast(e, loc)
@@ -1080,11 +1111,10 @@ object Resolver {
               }
           }
 
-        case NamedAst.Expression.NewChannel(exp, tpe, loc) =>
-          val tVal = resolveType(tpe, taenv, ns0, root)
+        case NamedAst.Expression.NewChannel(exp, loc) =>
           val eVal = visitExp(exp, region)
-          mapN(tVal, eVal) {
-            case (t, e) => ResolvedAst.Expression.NewChannel(e, t, loc)
+          mapN(eVal) {
+            case e => ResolvedAst.Expression.NewChannel(e, loc)
           }
 
         case NamedAst.Expression.GetChannel(exp, loc) =>
@@ -1210,12 +1240,6 @@ object Resolver {
           mapN(e1Val, e2Val, e3Val) {
             case (e1, e2, e3) => ResolvedAst.Expression.ReifyEff(sym, e1, e2, e3, loc)
           }
-
-        case NamedAst.Expression.Debug(exp1, exp2, loc) =>
-          mapN(visitExp(exp1, region), visitExp(exp2, region)) {
-            case (e1, e2) => ResolvedAst.Expression.Debug(e1, e2, loc)
-          }
-
       }
 
       /**
@@ -1260,6 +1284,8 @@ object Resolver {
         case NamedAst.Pattern.Float32(lit, loc) => ResolvedAst.Pattern.Float32(lit, loc).toSuccess
 
         case NamedAst.Pattern.Float64(lit, loc) => ResolvedAst.Pattern.Float64(lit, loc).toSuccess
+
+        case NamedAst.Pattern.BigDecimal(lit, loc) => ResolvedAst.Pattern.BigDecimal(lit, loc).toSuccess
 
         case NamedAst.Pattern.Int8(lit, loc) => ResolvedAst.Pattern.Int8(lit, loc).toSuccess
 
@@ -1747,6 +1773,7 @@ object Resolver {
       case "Char" => UnkindedType.Cst(TypeConstructor.Char, loc).toSuccess
       case "Float32" => UnkindedType.Cst(TypeConstructor.Float32, loc).toSuccess
       case "Float64" => UnkindedType.Cst(TypeConstructor.Float64, loc).toSuccess
+      case "BigDecimal" => UnkindedType.Cst(TypeConstructor.BigDecimal, loc).toSuccess
       case "Int8" => UnkindedType.Cst(TypeConstructor.Int8, loc).toSuccess
       case "Int16" => UnkindedType.Cst(TypeConstructor.Int16, loc).toSuccess
       case "Int32" => UnkindedType.Cst(TypeConstructor.Int32, loc).toSuccess
@@ -1779,7 +1806,7 @@ object Resolver {
       }
 
     case NamedAst.Type.Enum(sym, loc) =>
-      mkUnkindedEnum(sym, loc).toSuccess
+      mkEnum(sym, loc).toSuccess
 
     case NamedAst.Type.Tuple(elms0, loc) =>
       val elmsVal = traverse(elms0)(tpe => semiResolveType(tpe, ns0, root))
@@ -1851,8 +1878,17 @@ object Resolver {
 
     case NamedAst.Type.Native(fqn, loc) =>
       fqn match {
+        case "java.math.BigDecimal" => UnkindedType.Cst(TypeConstructor.BigDecimal, loc).toSuccess
         case "java.math.BigInteger" => UnkindedType.Cst(TypeConstructor.BigInt, loc).toSuccess
         case "java.lang.String" => UnkindedType.Cst(TypeConstructor.Str, loc).toSuccess
+        case "java.util.function.IntFunction" => UnkindedType.mkImpureArrow(UnkindedType.mkInt32(loc), UnkindedType.mkObject(loc), loc).toSuccess
+        case "java.util.function.IntUnaryOperator" => UnkindedType.mkImpureArrow(UnkindedType.mkInt32(loc), UnkindedType.mkInt32(loc), loc).toSuccess
+        case "java.util.function.IntPredicate" => UnkindedType.mkImpureArrow(UnkindedType.mkInt32(loc), UnkindedType.mkBool(loc), loc).toSuccess
+        case "java.util.function.IntConsumer" => UnkindedType.mkImpureArrow(UnkindedType.mkInt32(loc), UnkindedType.mkUnit(loc), loc).toSuccess
+        case "java.util.function.LongFunction" => UnkindedType.mkImpureArrow(UnkindedType.mkInt64(loc), UnkindedType.mkObject(loc), loc).toSuccess
+        case "java.util.function.LongUnaryOperator" => UnkindedType.mkImpureArrow(UnkindedType.mkInt64(loc), UnkindedType.mkInt64(loc), loc).toSuccess
+        case "java.util.function.LongPredicate" => UnkindedType.mkImpureArrow(UnkindedType.mkInt64(loc), UnkindedType.mkBool(loc), loc).toSuccess
+        case "java.util.function.LongConsumer" => UnkindedType.mkImpureArrow(UnkindedType.mkInt64(loc), UnkindedType.mkUnit(loc), loc).toSuccess
         case _ => lookupJvmClass(fqn, loc) map {
           case clazz => UnkindedType.Cst(TypeConstructor.Native(clazz), loc)
         }
@@ -2381,7 +2417,7 @@ object Resolver {
     */
   private def getEnumTypeIfAccessible(enum0: NamedAst.Enum, ns0: Name.NName, loc: SourceLocation): Validation[UnkindedType, ResolutionError] =
     getEnumIfAccessible(enum0, ns0, loc) map {
-      case enum => mkUnkindedEnum(enum.sym, loc)
+      case enum => mkEnum(enum.sym, loc)
     }
 
   /**
@@ -2503,26 +2539,28 @@ object Resolver {
   private def lookupJvmMethod(clazz: Class[_], methodName: String, signature: List[UnkindedType], retTpe: UnkindedType, static: Boolean, loc: SourceLocation)(implicit flix: Flix): Validation[Method, ResolutionError] = {
     // Lookup the signature.
     flatMapN(lookupSignature(signature, loc)) {
-      sig => try {
-        // Lookup the method with the appropriate signature.
-        val method = clazz.getMethod(methodName, sig: _*)
+      sig =>
+        try {
+          // Lookup the method with the appropriate signature.
+          val method = clazz.getMethod(methodName, sig: _*)
 
-        // Check if the method should be and is static.
-        if (static != Modifier.isStatic(method.getModifiers)) {
-          throw new NoSuchMethodException()
-        } else {
-          // Check that the return type of the method matches the declared type.
-          // We currently don't know how to handle all possible return types,
-          // so only check the straightforward cases for now and succeed all others.
-          // TODO move to typer
-          val erasedRetTpe = UnkindedType.eraseAliases(retTpe)
-          erasedRetTpe.baseType match {
-            case UnkindedType.Cst(TypeConstructor.Unit, _) | UnkindedType.Cst(TypeConstructor.Bool, _) |
-                 UnkindedType.Cst(TypeConstructor.Char, _) | UnkindedType.Cst(TypeConstructor.Float32, _) |
-                 UnkindedType.Cst(TypeConstructor.Float64, _) | UnkindedType.Cst(TypeConstructor.Int8, _) |
-                 UnkindedType.Cst(TypeConstructor.Int16, _) | UnkindedType.Cst(TypeConstructor.Int32, _) |
-                 UnkindedType.Cst(TypeConstructor.Int64, _) | UnkindedType.Cst(TypeConstructor.BigInt, _) |
-                 UnkindedType.Cst(TypeConstructor.Str, _) | UnkindedType.Cst(TypeConstructor.Native(_), _) =>
+          // Check if the method should be and is static.
+          if (static != Modifier.isStatic(method.getModifiers)) {
+            throw new NoSuchMethodException()
+          } else {
+            // Check that the return type of the method matches the declared type.
+            // We currently don't know how to handle all possible return types,
+            // so only check the straightforward cases for now and succeed all others.
+            // TODO move to typer
+            val erasedRetTpe = UnkindedType.eraseAliases(retTpe)
+            erasedRetTpe.baseType match {
+              case UnkindedType.Cst(TypeConstructor.Unit, _) | UnkindedType.Cst(TypeConstructor.Bool, _) |
+                   UnkindedType.Cst(TypeConstructor.Char, _) | UnkindedType.Cst(TypeConstructor.Float32, _) |
+                   UnkindedType.Cst(TypeConstructor.Float64, _) | UnkindedType.Cst(TypeConstructor.BigDecimal, _) |
+                   UnkindedType.Cst(TypeConstructor.Int8, _) | UnkindedType.Cst(TypeConstructor.Int16, _) |
+                   UnkindedType.Cst(TypeConstructor.Int32, _) | UnkindedType.Cst(TypeConstructor.Int64, _) |
+                   UnkindedType.Cst(TypeConstructor.BigInt, _) | UnkindedType.Cst(TypeConstructor.Str, _) |
+                   UnkindedType.Cst(TypeConstructor.Native(_), _) =>
 
                 val expectedTpe = UnkindedType.getFlixType(method.getReturnType)
                 if (expectedTpe != erasedRetTpe)
@@ -2530,15 +2568,15 @@ object Resolver {
                 else
                   method.toSuccess
 
-            case _ => method.toSuccess
+              case _ => method.toSuccess
+            }
           }
+        } catch {
+          case ex: NoSuchMethodException =>
+            val candidateMethods = clazz.getMethods.filter(m => m.getName == methodName).toList
+            ResolutionError.UndefinedJvmMethod(clazz.getName, methodName, static, sig, candidateMethods, loc).toFailure
+          case ex: NoClassDefFoundError => ResolutionError.MissingJvmDependency(clazz.getName, ex.getMessage, loc).toFailure
         }
-      } catch {
-        case ex: NoSuchMethodException =>
-          val candidateMethods = clazz.getMethods.filter(m => m.getName == methodName).toList
-          ResolutionError.UndefinedJvmMethod(clazz.getName, methodName, static, sig, candidateMethods, loc).toFailure
-        case ex: NoClassDefFoundError => ResolutionError.MissingJvmDependency(clazz.getName, ex.getMessage, loc).toFailure
-      }
     }
   }
 
@@ -2593,6 +2631,8 @@ object Resolver {
 
         case TypeConstructor.Float64 => classOf[Double].toSuccess
 
+        case TypeConstructor.BigDecimal => Class.forName("java.math.BigDecimal").toSuccess
+
         case TypeConstructor.Int8 => classOf[Byte].toSuccess
 
         case TypeConstructor.Int16 => classOf[Short].toSuccess
@@ -2606,8 +2646,6 @@ object Resolver {
         case TypeConstructor.Str => Class.forName("java.lang.String").toSuccess
 
         case TypeConstructor.Channel => Class.forName("java.lang.Object").toSuccess
-
-        case TypeConstructor.Enum(_, _) => Class.forName("java.lang.Object").toSuccess
 
         case TypeConstructor.Ref => Class.forName("java.lang.Object").toSuccess
 
@@ -2633,7 +2671,6 @@ object Resolver {
 
         case TypeConstructor.All => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.And => ResolutionError.IllegalType(tpe, loc).toFailure
-        case TypeConstructor.Arrow(_) => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Complement => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Effect(_) => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Empty => ResolutionError.IllegalType(tpe, loc).toFailure
@@ -2641,7 +2678,7 @@ object Resolver {
         case TypeConstructor.Intersection => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Lattice => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Lazy => ResolutionError.IllegalType(tpe, loc).toFailure
-        case TypeConstructor.Not=> ResolutionError.IllegalType(tpe, loc).toFailure
+        case TypeConstructor.Not => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Null => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Or => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.RecordRowEmpty => ResolutionError.IllegalType(tpe, loc).toFailure
@@ -2653,117 +2690,64 @@ object Resolver {
         case TypeConstructor.True => ResolutionError.IllegalType(tpe, loc).toFailure
         case TypeConstructor.Union => ResolutionError.IllegalType(tpe, loc).toFailure
 
+        case t: TypeConstructor.Arrow => throw InternalCompilerException(s"unexpected type: $t")
+        case t: TypeConstructor.Enum => throw InternalCompilerException(s"unexpected type: $t")
 
       }
 
-      // Case 2: Enum. Return an object type.
+      // Case 2: Arrow. Convert to Java function interface
+      case UnkindedType.Arrow(_, _, _) =>
+        val targsVal = traverse(erased.typeArguments)(targ => getJVMType(targ, targ.loc))
+        val returnsUnit = erased.typeArguments.lastOption match {
+          case Some(ty) => isBaseTypeUnit(ty)
+          case None => false
+        }
+        flatMapN(targsVal) {
+          case Int :: Int :: Nil => Class.forName("java.util.function.IntUnaryOperator").toSuccess
+          case Int :: Boolean :: Nil => Class.forName("java.util.function.IntPredicate").toSuccess
+          case Int :: Object :: Nil =>
+              if (returnsUnit) Class.forName("java.util.function.IntConsumer").toSuccess  else Class.forName("java.util.function.IntFunction").toSuccess
+          case Long :: Long :: Nil => Class.forName("java.util.function.LongUnaryOperator").toSuccess
+          case Long :: Boolean :: Nil => Class.forName("java.util.function.LongPredicate").toSuccess
+          case Long :: Object :: Nil =>
+            if (returnsUnit) Class.forName("java.util.function.LongConsumer").toSuccess  else Class.forName("java.util.function.LongFunction").toSuccess
+          case _ => ResolutionError.IllegalType(tpe, loc).toFailure
+        }
+
+      // Case 3: Enum. Return an object type.
       case _: UnkindedType.Enum => Class.forName("java.lang.Object").toSuccess
 
-      // Case 3: Ascription. Ignore it and recurse.
+      // Case 4: Ascription. Ignore it and recurse.
       case UnkindedType.Ascribe(t, _, _) => getJVMType(UnkindedType.mkApply(t, erased.typeArguments, loc), loc)
 
-      // Case 4: Illegal type. Error.
+      // Case 5: Illegal type. Error.
       case _: UnkindedType.Var => ResolutionError.IllegalType(tpe, loc).toFailure
-      case _: UnkindedType.Arrow => ResolutionError.IllegalType(tpe, loc).toFailure
       case _: UnkindedType.ReadWrite => ResolutionError.IllegalType(tpe, loc).toFailure
 
-      // Case 5: Unexpected type. Crash.
+      // Case 6: Unexpected type. Crash.
       case t: UnkindedType.Apply => throw InternalCompilerException(s"unexpected type: $t")
       case t: UnkindedType.UnappliedAlias => throw InternalCompilerException(s"unexpected type: $t")
       case t: UnkindedType.Alias => throw InternalCompilerException(s"unexpected type: $t")
     }
   }
 
-  /**
-    * Returns a synthetic namespace obtained from the given sequence of namespace `parts`.
-    */
-  private def getNS(parts: List[String]): Name.NName = {
-    val sp1 = SourcePosition.Unknown
-    val sp2 = SourcePosition.Unknown
-    val idents = parts.map(s => Name.Ident(sp1, s, sp2))
-    Name.NName(sp1, idents, sp2)
+  private def isBaseTypeUnit(tpe: UnkindedType):  Boolean = {
+    val erased = UnkindedType.eraseAliases(tpe)
+    val baseType = erased.baseType
+    baseType match {
+      // Case 1: Constant: Match on the type.
+      case UnkindedType.Cst(tc, _) => tc match {
+        case TypeConstructor.Unit => true
+        case _ => false
+      }
+      case _ => false
+    }
   }
 
-  /**
-    * Construct the enum type constructor for the given symbol `sym` with the given kind `k`.
-    */
-  def mkUnkindedEnum(sym: Symbol.EnumSym, loc: SourceLocation): UnkindedType = UnkindedType.Enum(sym, loc)
-
-  /**
-    * Construct the enum type `Sym[ts]`.
-    */
-  def mkUnkindedEnum(sym: Symbol.EnumSym, ts: List[Symbol.UnkindedTypeVarSym], loc: SourceLocation): UnkindedType = {
-    val args = ts.map(sym => UnkindedType.Var(sym, sym.loc))
-    UnkindedType.mkApply(UnkindedType.Enum(sym, loc), args, loc)
-  }
-
-  /**
+            /**
     * Construct the type alias type constructor for the given symbol `sym` with the given kind `k`.
     */
   def mkUnappliedTypeAlias(sym: Symbol.TypeAliasSym, loc: SourceLocation): UnkindedType = UnkindedType.UnappliedAlias(sym, loc)
-
-  /**
-    * Construct the effect type for the given symbol.
-    */
-  def mkEffect(sym: Symbol.EffectSym, loc: SourceLocation): UnkindedType = UnkindedType.Cst(TypeConstructor.Effect(sym), loc)
-
-  /**
-    * Constructs a predicate type.
-    */
-  private def mkPredicate(den: Ast.Denotation, ts0: List[UnkindedType], loc: SourceLocation): UnkindedType = {
-    val tycon = den match {
-      case Denotation.Relational => UnkindedType.Cst(TypeConstructor.Relation, loc)
-      case Denotation.Latticenal => UnkindedType.Cst(TypeConstructor.Lattice, loc)
-    }
-    val ts = ts0 match {
-      case Nil => UnkindedType.Cst(TypeConstructor.Unit, loc)
-      case x :: Nil => x
-      case xs => UnkindedType.mkTuple(xs, loc)
-    }
-
-    UnkindedType.Apply(tycon, ts, loc)
-  }
-
-  /**
-    * Returns the type `Not(tpe1)`.
-    */
-  private def mkNot(tpe1: UnkindedType, loc: SourceLocation): UnkindedType = UnkindedType.mkApply(UnkindedType.Cst(TypeConstructor.Not, loc), List(tpe1), loc)
-
-  /**
-    * Returns the type `And(tpe1, tpe2)`.
-    */
-  private def mkAnd(tpe1: UnkindedType, tpe2: UnkindedType, loc: SourceLocation): UnkindedType = UnkindedType.mkApply(UnkindedType.Cst(TypeConstructor.And, loc), List(tpe1, tpe2), loc)
-
-  /**
-    * Returns the type `Or(tpe1, tpe2)`.
-    */
-  private def mkOr(tpe1: UnkindedType, tpe2: UnkindedType, loc: SourceLocation): UnkindedType = UnkindedType.mkApply(UnkindedType.Cst(TypeConstructor.Or, loc), List(tpe1, tpe2), loc)
-
-  /**
-    * Returns the type `Complement(tpe1)`.
-    */
-  private def mkComplement(tpe1: UnkindedType, loc: SourceLocation): UnkindedType = UnkindedType.mkApply(UnkindedType.Cst(TypeConstructor.Complement, loc), List(tpe1), loc)
-
-  /**
-    * Returns the type `Union(tpe1, tpe2)`.
-    */
-  private def mkUnion(tpe1: UnkindedType, tpe2: UnkindedType, loc: SourceLocation): UnkindedType = UnkindedType.mkApply(UnkindedType.Cst(TypeConstructor.Union, loc), List(tpe1, tpe2), loc)
-
-  /**
-    * Returns the type `Intersection(tpe1, tpe2)`.
-    */
-  private def mkIntersection(tpe1: UnkindedType, tpe2: UnkindedType, loc: SourceLocation): UnkindedType = UnkindedType.mkApply(UnkindedType.Cst(TypeConstructor.Intersection, loc), List(tpe1, tpe2), loc)
-
-  /**
-    * Constructs the uncurried arrow type (A_1, ..., A_n) -> B & e.
-    */
-  def mkUncurriedArrowWithEffect(as: List[UnkindedType], e: UnkindedType.PurityAndEffect, b: UnkindedType, loc: SourceLocation): UnkindedType = {
-    val arrow = UnkindedType.Arrow(e, as.length + 1, loc)
-    val inner = as.foldLeft(arrow: UnkindedType) {
-      case (acc, x) => UnkindedType.Apply(acc, x, loc)
-    }
-    UnkindedType.Apply(inner, b, loc)
-  }
 
   /**
     * Returns either the explicit region (if present), the current region (if present), or the global region.

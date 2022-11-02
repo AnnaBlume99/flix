@@ -425,6 +425,17 @@ object ParsedAst {
     case class Float64(sp1: SourcePosition, sign: String, before: String, after: String, sp2: SourcePosition) extends ParsedAst.Literal
 
     /**
+      * BigDecimal Literal (arbitrary sized floating-point number).
+      *
+      * @param sp1    the position of the first character in the literal.
+      * @param sign   the sign.
+      * @param before the digits before the decimal point.
+      * @param after  the digits after the decimal point.
+      * @param sp2    the position of the last character in the literal.
+      */
+    case class BigDecimal(sp1: SourcePosition, sign: String, before: String, after: String, sp2: SourcePosition) extends ParsedAst.Literal
+
+    /**
       * Int8 Literal (signed 8-bit integer).
       *
       * @param sp1   the position of the first character in the literal.
@@ -487,14 +498,6 @@ object ParsedAst {
       * @param sp2   the position of the last character in the literal.
       */
     case class Str(sp1: SourcePosition, chars: Seq[ParsedAst.CharCode], sp2: SourcePosition) extends ParsedAst.Literal
-
-    /**
-      * Default Literal.
-      *
-      * @param sp1 the position of the first character in the literal.
-      * @param sp2 the position of the last character in the literal.
-      */
-    case class Default(sp1: SourcePosition, sp2: SourcePosition) extends ParsedAst.Literal
   }
 
   /**
@@ -734,6 +737,16 @@ object ParsedAst {
       * @param sp2   the position of the last character in the expression.
       */
     case class Match(sp1: SourcePosition, exp: ParsedAst.Expression, rules: Seq[ParsedAst.MatchRule], sp2: SourcePosition) extends ParsedAst.Expression
+
+    /**
+      * Type Match Expression.
+      *
+      * @param sp1   the position of the first character in the expression.
+      * @param exp   the value expression.
+      * @param rules the rules of the type match.
+      * @param sp2   the position of the last character in the expression.
+      */
+    case class TypeMatch(sp1: SourcePosition, exp: ParsedAst.Expression, rules: Seq[ParsedAst.MatchTypeRule], sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
       * Choose Expression.
@@ -986,6 +999,15 @@ object ParsedAst {
     case class Cast(exp: ParsedAst.Expression, tpe: Option[ParsedAst.Type], purAndEff: ParsedAst.PurityAndEffect, sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
+      * Mask expression
+      *
+      * @param sp1 the position of the first character in the expression.
+      * @param exp the expression to mask.
+      * @param sp2 the position of the last character in the expression.
+      */
+    case class Mask(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
+
+    /**
       * Upcast Expression.
       *
       * @param sp1 the position of the first character in the expression.
@@ -1031,34 +1053,6 @@ object ParsedAst {
       * @param sp2            the position of the last character in the expression.
       */
     case class Try(sp1: SourcePosition, exp: ParsedAst.Expression, catchOrHandler: CatchOrHandler, sp2: SourcePosition) extends ParsedAst.Expression
-
-    /**
-      * NewChannel Expression.
-      *
-      * @param sp1 the position of the first character in the expression.
-      * @param tpe the type of the channel elements.
-      * @param exp the size of the channel.
-      * @param sp2 the position of the last character in the expression.
-      */
-    case class NewChannel(sp1: SourcePosition, tpe: ParsedAst.Type, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
-
-    /**
-      * GetChannel Expression.
-      *
-      * @param sp1 the position of the first character in the expression.
-      * @param exp the channel expression.
-      * @param sp2 the position of the last character in the expression.
-      */
-    case class GetChannel(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
-
-    /**
-      * PutChannel Expression
-      *
-      * @param exp1 the channel expression.
-      * @param exp2 the expression to put in the channel.
-      * @param sp2  the position of the last character in the expression.
-      */
-    case class PutChannel(exp1: ParsedAst.Expression, exp2: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
       * SelectChannel Expression.
@@ -1217,11 +1211,12 @@ object ParsedAst {
     /**
       * Debug expression.
       *
-      * @param sp1 the position of the first character in the expression.
-      * @param exp the expression to print.
-      * @param sp2 the position of the last character in the expression.
+      * @param sp1  the position of the first character in the expression.
+      * @param kind the debug kind.
+      * @param exp  the expression to print.
+      * @param sp2  the position of the last character in the expression.
       */
-    case class Debug(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
+    case class Debug(sp1: SourcePosition, kind: ParsedAst.DebugKind, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
   }
 
@@ -1966,6 +1961,15 @@ object ParsedAst {
   case class ChoiceRule(sp1: SourcePosition, pat: Seq[ParsedAst.ChoicePattern], exp: ParsedAst.Expression, sp2: SourcePosition)
 
   /**
+    * A type match rule consists of a variable, a type, and a body expression.
+    *
+    * @param ident the variable of the rule.
+    * @param tpe   the type of the rule
+    * @param exp   the body expression of the rule.
+    */
+  case class MatchTypeRule(ident: Name.Ident, tpe: ParsedAst.Type, exp: ParsedAst.Expression)
+
+  /**
     * A pattern match rule consists of a pattern, an optional pattern guard, and a body expression.
     *
     * @param pat   the pattern of the rule.
@@ -2249,6 +2253,28 @@ object ParsedAst {
       */
     case class LatPredicateWithTypes(sp1: SourcePosition, name: Name.Ident, tpes: Seq[ParsedAst.Type], tpe: ParsedAst.Type, sp2: SourcePosition) extends PredicateType
 
+  }
+
+  /**
+    * A common super-type for debug kinds.
+    */
+  sealed trait DebugKind
+
+  object DebugKind {
+    /**
+      * Print the debugged value (and nothing else).
+      */
+    case object Debug extends DebugKind
+
+    /**
+      * Print the debugged value prefixed with the file name and line number.
+      */
+    case object DebugWithLoc extends DebugKind
+
+    /**
+      * Print the debugged value prefix with the file name and line number, and the source code of the expression.
+      */
+    case object DebugWithLocAndSrc extends DebugKind
   }
 
   /**

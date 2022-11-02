@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use Fixpoint.PredSymsOf
-use Fixpoint/PredSymsOf.predSymsOf
-use Fixpoint.SubstitutePredSym
-use Fixpoint/SubstitutePredSym.substitute
-use Fixpoint/Shared.PredSym
 
 namespace Fixpoint/Ast {
+
+    use Fixpoint.PredSymsOf
+    use Fixpoint/PredSymsOf.predSymsOf
+    use Fixpoint.SubstitutePredSym
+    use Fixpoint/SubstitutePredSym.substitute
+    use Fixpoint/Shared.PredSym
 
     @Internal
     pub enum Constraint[v] {
@@ -44,7 +45,7 @@ namespace Fixpoint/Ast {
         }
     }
 
-    instance ToString[Constraint[v]] with ToString[v] {
+    instance ToString[Constraint[v]] {
         pub def toString(c: Constraint[v]): String =
             match c {
                 case Constraint(head, body) =>

@@ -101,6 +101,8 @@ object WeededAst {
 
     case class Float64(lit: scala.Double, loc: SourceLocation) extends WeededAst.Expression
 
+    case class BigDecimal(lit: java.math.BigDecimal, loc: SourceLocation) extends WeededAst.Expression
+
     case class Int8(lit: scala.Byte, loc: SourceLocation) extends WeededAst.Expression
 
     case class Int16(lit: scala.Short, loc: SourceLocation) extends WeededAst.Expression
@@ -112,8 +114,6 @@ object WeededAst {
     case class BigInt(lit: java.math.BigInteger, loc: SourceLocation) extends WeededAst.Expression
 
     case class Str(lit: java.lang.String, loc: SourceLocation) extends WeededAst.Expression
-
-    case class Default(loc: SourceLocation) extends WeededAst.Expression
 
     case class Apply(exp: WeededAst.Expression, exps: List[WeededAst.Expression], loc: SourceLocation) extends WeededAst.Expression
 
@@ -138,6 +138,8 @@ object WeededAst {
     case class Scope(ident: Name.Ident, exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class Match(exp: WeededAst.Expression, rules: List[WeededAst.MatchRule], loc: SourceLocation) extends WeededAst.Expression
+
+    case class TypeMatch(exp: WeededAst.Expression, rules: List[WeededAst.MatchTypeRule], loc: SourceLocation) extends WeededAst.Expression
 
     case class Choose(star: Boolean, exps: List[WeededAst.Expression], rules: List[WeededAst.ChoiceRule], loc: SourceLocation) extends WeededAst.Expression
 
@@ -177,6 +179,8 @@ object WeededAst {
 
     case class Cast(exp: WeededAst.Expression, declaredType: Option[WeededAst.Type], declaredEff: WeededAst.PurityAndEffect, loc: SourceLocation) extends WeededAst.Expression
 
+    case class Mask(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
+
     case class Upcast(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class Without(exp: WeededAst.Expression, eff: Name.QName, loc: SourceLocation) extends WeededAst.Expression
@@ -205,7 +209,7 @@ object WeededAst {
 
     case class NewObject(tpe: WeededAst.Type, methods: List[JvmMethod], loc: SourceLocation) extends WeededAst.Expression
 
-    case class NewChannel(exp: WeededAst.Expression, tpe: WeededAst.Type, loc: SourceLocation) extends WeededAst.Expression
+    case class NewChannel(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
     case class GetChannel(exp: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
@@ -241,8 +245,6 @@ object WeededAst {
 
     case class ReifyEff(ident: Name.Ident, exp1: WeededAst.Expression, exp2: WeededAst.Expression, exp3: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
 
-    case class Debug(exp1: WeededAst.Expression, exp2: WeededAst.Expression, loc: SourceLocation) extends WeededAst.Expression
-
   }
 
   sealed trait Pattern {
@@ -266,6 +268,8 @@ object WeededAst {
     case class Float32(lit: scala.Float, loc: SourceLocation) extends WeededAst.Pattern
 
     case class Float64(lit: scala.Double, loc: SourceLocation) extends WeededAst.Pattern
+
+    case class BigDecimal(lit: java.math.BigDecimal, loc: SourceLocation) extends WeededAst.Pattern
 
     case class Int8(lit: scala.Byte, loc: SourceLocation) extends WeededAst.Pattern
 
@@ -437,6 +441,8 @@ object WeededAst {
   case class Constraint(head: WeededAst.Predicate.Head, body: List[WeededAst.Predicate.Body], loc: SourceLocation)
 
   case class MatchRule(pat: WeededAst.Pattern, guard: WeededAst.Expression, exp: WeededAst.Expression)
+
+  case class MatchTypeRule(ident: Name.Ident, tpe: WeededAst.Type, exp: WeededAst.Expression)
 
   case class SelectChannelRule(ident: Name.Ident, channel: WeededAst.Expression, exp: WeededAst.Expression)
 

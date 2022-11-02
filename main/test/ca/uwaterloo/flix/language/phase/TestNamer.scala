@@ -20,6 +20,7 @@ import ca.uwaterloo.flix.TestUtils
 import ca.uwaterloo.flix.language.errors.NameError
 import ca.uwaterloo.flix.util.Options
 import org.scalatest.FunSuite
+import ca.uwaterloo.flix.language.errors.ResolutionError
 
 class TestNamer extends FunSuite with TestUtils {
 
@@ -334,9 +335,8 @@ class TestNamer extends FunSuite with TestUtils {
   test("DuplicateUseLower.06") {
     val input =
       s"""
-         |use A.f
-         |
          |namespace T {
+         |    use A.f
          |    use B.f
          |    def foo(): Bool =
          |        f() == f()
@@ -414,7 +414,7 @@ class TestNamer extends FunSuite with TestUtils {
          |}
        """.stripMargin
     val result = compile(input, Options.TestWithLibNix)
-    expectError[NameError.DuplicateUseUpper](result)
+    expectError[NameError.DuplicateUpperName](result)
   }
 
   test("DuplicateUseUpper.02") {
@@ -439,7 +439,7 @@ class TestNamer extends FunSuite with TestUtils {
          |
        """.stripMargin
     val result = compile(input, Options.TestWithLibNix)
-    expectError[NameError.DuplicateUseUpper](result)
+    expectError[NameError.DuplicateUpperName](result)
   }
 
   test("DuplicateUseUpper.03") {
@@ -465,7 +465,7 @@ class TestNamer extends FunSuite with TestUtils {
          |}
        """.stripMargin
     val result = compile(input, Options.TestWithLibNix)
-    expectError[NameError.DuplicateUseUpper](result)
+    expectError[NameError.DuplicateUpperName](result)
   }
 
   test("DuplicateUseTag.01") {
@@ -901,6 +901,84 @@ class TestNamer extends FunSuite with TestUtils {
     expectError[NameError.DuplicateUpperName](result)
   }
 
+  test("DuplicateUpperName.21") {
+    val input =
+      """
+        |import java.sql.Statement
+        |enum Statement
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
+  test("DuplicateUpperName.22") {
+    val input =
+      """
+        |enum Statement
+        |type alias Statement = Int
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
+  test("DuplicateUpperName.23") {
+    val input =
+      """
+        |use A.Statement
+        |enum Statement
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
+  test("DuplicateUpperName.24") {
+    val input =
+      """
+        |namespace A {
+        |    import java.sql.Statement
+        |    enum Statement
+        |}
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
+  test("DuplicateUpperName.25") {
+    val input =
+      """
+        |namespace A {
+        |    use B.Statement
+        |    import java.sql.Statement
+        |}
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
+  test("DuplicateUpperName.26") {
+    val input =
+      """
+        |enum Statement
+        |namespace A {
+        |    use B.Statement
+        |}
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
+  test("DuplicateUpperName.27") {
+    val input =
+      """
+        |enum Statement
+        |namespace A {
+        |    import B.Statement
+        |}
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.DuplicateUpperName](result)
+  }
+
   test("SuspiciousTypeVarName.01") {
     val input =
       s"""
@@ -991,6 +1069,18 @@ class TestNamer extends FunSuite with TestUtils {
         |class A[a]
         |class B[a]
         |class C[a] with A[a], B[b]
+        |""".stripMargin
+    val result = compile(input, Options.TestWithLibNix)
+    expectError[NameError.UndefinedTypeVar](result)
+  }
+
+  test("UndefinedTypeVar.Expression.01") {
+    val input =
+      """
+        |def f(): Bool = typematch () {
+        |    case _: a => true
+        |    case _: _ => false
+        |}
         |""".stripMargin
     val result = compile(input, Options.TestWithLibNix)
     expectError[NameError.UndefinedTypeVar](result)
@@ -1087,9 +1177,8 @@ class TestNamer extends FunSuite with TestUtils {
   test("DuplicateImport.03") {
     val input =
       """
-        |import java.lang.StringBuffer
-        |
         |namespace A {
+        |    import java.lang.StringBuffer
         |    import java.lang.StringBuffer
         |}
         |""".stripMargin
@@ -1100,9 +1189,8 @@ class TestNamer extends FunSuite with TestUtils {
   test("DuplicateImport.04") {
     val input =
       """
-        |import java.lang.{StringBuffer => StringThingy}
-        |
         |namespace A {
+        |    import java.lang.{StringBuffer => StringThingy}
         |    import java.lang.{StringBuilder => StringThingy}
         |}
         |""".stripMargin

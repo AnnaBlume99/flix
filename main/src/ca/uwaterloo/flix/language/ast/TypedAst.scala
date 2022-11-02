@@ -16,8 +16,9 @@
 
 package ca.uwaterloo.flix.language.ast
 
-import ca.uwaterloo.flix.language.ast.Ast.{Denotation, Source}
+import ca.uwaterloo.flix.language.ast.Ast.{Denotation, EliminatedBy, Source}
 import ca.uwaterloo.flix.language.dbg.{FormatExpression, FormatPattern}
+import ca.uwaterloo.flix.language.phase.Lowering
 
 import java.lang.reflect.{Constructor, Field, Method}
 
@@ -122,6 +123,14 @@ object TypedAst {
       def eff: Type = Type.Empty
     }
 
+    case class BigDecimal(lit: java.math.BigDecimal, loc: SourceLocation) extends TypedAst.Expression {
+      def tpe: Type = Type.BigDecimal
+
+      def pur: Type = Type.Pure
+
+      def eff: Type = Type.Empty
+    }
+
     case class Int8(lit: scala.Byte, loc: SourceLocation) extends TypedAst.Expression {
       def tpe: Type = Type.Int8
 
@@ -165,12 +174,6 @@ object TypedAst {
     case class Str(lit: java.lang.String, loc: SourceLocation) extends TypedAst.Expression {
       def tpe: Type = Type.Str
 
-      def pur: Type = Type.Pure
-
-      def eff: Type = Type.Empty
-    }
-
-    case class Default(tpe: Type, loc: SourceLocation) extends TypedAst.Expression {
       def pur: Type = Type.Pure
 
       def eff: Type = Type.Empty
@@ -240,6 +243,8 @@ object TypedAst {
 
     case class Match(exp: TypedAst.Expression, rules: List[TypedAst.MatchRule], tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
+    case class TypeMatch(exp: TypedAst.Expression, rules: List[TypedAst.MatchTypeRule], tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
+
     case class Choose(exps: List[TypedAst.Expression], rules: List[TypedAst.ChoiceRule], tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
     case class Tag(sym: Ast.CaseSymUse, exp: TypedAst.Expression, tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
@@ -283,6 +288,9 @@ object TypedAst {
     case class Ascribe(exp: TypedAst.Expression, tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
     case class Cast(exp: TypedAst.Expression, declaredType: Option[Type], declaredPur: Option[Type], declaredEff: Option[Type], tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
+
+    @EliminatedBy(Lowering.getClass)
+    case class Mask(exp: TypedAst.Expression, tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
     case class Upcast(exp: TypedAst.Expression, tpe: Type, loc: SourceLocation) extends TypedAst.Expression {
       override def pur: Type = exp.pur
@@ -372,8 +380,6 @@ object TypedAst {
 
     case class ReifyEff(sym: Symbol.VarSym, exp1: TypedAst.Expression, exp2: TypedAst.Expression, exp3: TypedAst.Expression, tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
 
-    case class Debug(exp1: TypedAst.Expression, exp2: TypedAst.Expression, tpe: Type, pur: Type, eff: Type, loc: SourceLocation) extends TypedAst.Expression
-
   }
 
   sealed trait Pattern {
@@ -412,6 +418,10 @@ object TypedAst {
 
     case class Float64(lit: scala.Double, loc: SourceLocation) extends TypedAst.Pattern {
       def tpe: Type = Type.Float64
+    }
+
+    case class BigDecimal(lit: java.math.BigDecimal, loc: SourceLocation) extends TypedAst.Pattern {
+      def tpe: Type = Type.BigDecimal
     }
 
     case class Int8(lit: scala.Byte, loc: SourceLocation) extends TypedAst.Pattern {
@@ -529,6 +539,8 @@ object TypedAst {
   case class ChoiceRule(pat: List[TypedAst.ChoicePattern], exp: TypedAst.Expression)
 
   case class MatchRule(pat: TypedAst.Pattern, guard: TypedAst.Expression, exp: TypedAst.Expression)
+
+  case class MatchTypeRule(sym: Symbol.VarSym, tpe: Type, exp: TypedAst.Expression)
 
   case class SelectChannelRule(sym: Symbol.VarSym, chan: TypedAst.Expression, exp: TypedAst.Expression)
 

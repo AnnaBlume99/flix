@@ -107,6 +107,8 @@ object CodeHinter {
 
     case Expression.Float64(_, _) => Nil
 
+    case Expression.BigDecimal(_, _) => Nil
+
     case Expression.Int8(_, _) => Nil
 
     case Expression.Int16(_, _) => Nil
@@ -118,8 +120,6 @@ object CodeHinter {
     case Expression.BigInt(_, _) => Nil
 
     case Expression.Str(_, _) => Nil
-
-    case Expression.Default(_, _) => Nil
 
     case Expression.Lambda(_, exp, _, _) =>
       checkPurity(exp.pur, exp.loc) ++ visitExp(exp)
@@ -162,6 +162,11 @@ object CodeHinter {
     case Expression.Match(matchExp, rules, _, _, _, _) =>
       visitExp(matchExp) ++ rules.flatMap {
         case MatchRule(_, guard, exp) => visitExp(guard) ++ visitExp(exp)
+      }
+
+    case Expression.TypeMatch(matchExp, rules, _, _, _, _) =>
+      visitExp(matchExp) ++ rules.flatMap {
+        case MatchTypeRule(_, _, exp) => visitExp(exp)
       }
 
     case Expression.Choose(exps, rules, _, _, _, _) =>
@@ -218,6 +223,9 @@ object CodeHinter {
 
     case Expression.Cast(exp, _, _, _, tpe, pur, _, loc) =>
       checkCast(tpe, pur, loc) ++ visitExp(exp)
+
+    case Expression.Mask(exp, _, _, _, _) =>
+      visitExp(exp)
 
     case Expression.Upcast(exp, _, _) =>
       visitExp(exp)
@@ -322,9 +330,6 @@ object CodeHinter {
 
     case Expression.ReifyEff(_, exp1, exp2, exp3, _, _, _, _) =>
       visitExp(exp1) ++ visitExp(exp2) ++ visitExp(exp3)
-
-    case Expression.Debug(exp1, exp2, _, _, _, _) =>
-      visitExp(exp1) ++ visitExp(exp2)
   }
 
   /**
