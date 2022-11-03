@@ -84,7 +84,7 @@ object BoolUnification {
     */
   private def booleanUnification[F](tpe1: F, tpe2: F, renv: Set[Int])(implicit flix: Flix, alg: BoolAlg[F]): Option[BoolSubstitution[F]] = {
     // The boolean expression we want to show is 0.
-    val query = alg.mkEq(tpe1, tpe2)
+    val query = alg.mkXor(tpe1, tpe2)
 
     // Compute the variables in the query.
     val typeVars = alg.freeVars(query).toList
@@ -96,7 +96,7 @@ object BoolUnification {
     val freeVars = computeVariableOrder(flexibleTypeVars)
 
     // Eliminate all variables.
-    Try {
+    try {
       val subst = successiveVariableElimination(query, freeVars)
 
       //    if (!subst.isEmpty) {
@@ -108,9 +108,11 @@ object BoolUnification {
       //      }
       //    }
 
-      subst
+      Some(subst)
+    } catch {
+      case ex: BooleanUnificationException => None
     }
-  }.toOption
+  }
 
   /**
     * A heuristic used to determine the order in which to eliminate variable.
@@ -141,7 +143,7 @@ object BoolUnification {
       if (!satisfiable(f))
         BoolSubstitution.empty
       else
-        throw BooleanUnificationException
+        throw BooleanUnificationException()
 
     case x :: xs =>
       val t0 = BoolSubstitution.singleton(x, alg.mkFalse)(f)
@@ -156,7 +158,7 @@ object BoolUnification {
   /**
     * An exception thrown to indicate that boolean unification failed.
     */
-  private case object BooleanUnificationException extends RuntimeException
+  private case class BooleanUnificationException() extends RuntimeException
 
   /**
     * Returns `true` if the given boolean formula `f` is satisfiable
@@ -179,12 +181,12 @@ object BoolUnification {
     * Naively computes if `f` is satisfiable using the SVE algorithm.
     */
   private def naiveSatisfiable[F](f: F)(implicit flix: Flix, alg: BoolAlg[F]): Boolean = {
-    val q = alg.mkEq(f, alg.mkTrue)
+    val q = alg.mkXor(f, alg.mkTrue)
     try {
       successiveVariableElimination(q, alg.freeVars(q).toList)
       true
     } catch {
-      case BooleanUnificationException => false
+      case ex: BooleanUnificationException => false
     }
   }
 }
