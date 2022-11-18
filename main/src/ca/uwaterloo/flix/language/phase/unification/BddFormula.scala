@@ -27,6 +27,7 @@ import java.util.concurrent.locks.ReentrantLock
 object BddFormula {
 
   val creator = Builders.bddBuilder().build()
+  val creator_lock = new ReentrantLock()
 
   class BddFormula(val dd: DD) {
     def getDD(): DD = dd
@@ -47,42 +48,68 @@ object BddFormula {
       * Returns a representation of TRUE.
       */
     override def mkTrue: BddFormula = {
-      new BddFormula(creator.makeTrue())
+      //creator_lock.lock()
+      val res = new BddFormula(creator.makeTrue())
+      //creator_lock.unlock()
+      res
     }
 
     /**
       * Returns a representation of FALSE.
       */
     override def mkFalse: BddFormula = {
-      new BddFormula(creator.makeFalse())
+      //creator_lock.lock()
+      val res = new BddFormula(creator.makeFalse())
+      //creator_lock.unlock()
+      res
     }
 
     /**
       * Returns a representation of the variable with the given `id`.
       */
     override def mkVar(id: Int): BddFormula = {
-      new BddFormula(creator.makeIthVar(id))
+      //creator_lock.lock()
+      val res = new BddFormula(creator.makeIthVar(id))
+      //creator_lock.unlock()
+      res
     }
 
     /**
       * Returns a representation of the complement of `f`.
       */
     override def mkNot(f: BddFormula): BddFormula = {
-      new BddFormula(creator.makeNot(f.getDD()))
+      //creator_lock.lock()
+      val res = new BddFormula(creator.makeNot(f.getDD()))
+      //creator_lock.unlock()
+      res
     }
 
     /**
       * Returns a representation of the disjunction of `f1` and `f2`.
       */
     override def mkOr(f1: BddFormula, f2: BddFormula): BddFormula = {
-      new BddFormula(creator.makeOr(f1.getDD(), f2.getDD()))
+      //creator_lock.lock()
+      val res = new BddFormula(creator.makeOr(f1.getDD(), f2.getDD()))
+      //creator_lock.unlock()
+      res
     }
 
     /**
       * Returns a representation of the conjunction of `f1` and `f2`.
       */
     override def mkAnd(f1: BddFormula, f2: BddFormula): BddFormula = {
-      new BddFormula(creator.makeAnd(f1.getDD(), f2.getDD()))
+      //creator_lock.lock()
+      val res = new BddFormula(creator.makeAnd(f1.getDD(), f2.getDD()))
+      //creator_lock.unlock()
+      res
+    }
+
+    override def mkEq(f1: BddFormula, f2: BddFormula): BddFormula = {
+      val not_f1 = mkNot(f1)
+      val not_f2 = mkNot(f2)
+      val f1_not_f2 = mkAnd(f1, not_f2)
+      val not_f1_f2 = mkAnd(not_f1, f2)
+      mkOr(f1_not_f2, not_f1_f2)
     }
 
     /**
@@ -109,6 +136,7 @@ object BddFormula {
       //TODO: Check correctness
     override def map(f: BddFormula)(fn: Int => BddFormula): BddFormula = {
       val exporter = new DotExporter()
+      //creator_lock.lock()
       if(f.getDD().isLeaf()) {
         f
       } else {
@@ -177,6 +205,7 @@ object BddFormula {
         val resForm = new BddFormula(res)
         println(exporter.bddToString(res))
 
+        //creator_lock.unlock()
         println("")
         println("")
         resForm
@@ -236,13 +265,5 @@ object BddFormula {
         case (_, _) => Type.mkApply(Type.Or, List(lowRes, highRes), SourceLocation.Unknown)
       }
     }
-
-    /**
-      * Optional operation. Returns `None` if not implemented.
-      *
-      * Returns `Some(true)` if `f` is satisfiable (i.e. has a satisfying assignment).
-      * Returns `Some(false)` otherwise.
-      */
-    override def satisfiable(f: BddFormula): Option[Boolean] = Some(!f.getDD().isFalse())
   }
 }
