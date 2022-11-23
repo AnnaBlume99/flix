@@ -1496,6 +1496,11 @@ object Weeder {
         case e => WeededAst.Expression.Upcast(e, mkSL(sp1, sp2))
       }
 
+    case ParsedAst.Expression.Supercast(sp1, exp, sp2) =>
+      mapN(visitExp(exp, senv)) {
+        case e => WeededAst.Expression.Supercast(e, mkSL(sp1, sp2))
+      }
+
     case ParsedAst.Expression.Without(exp, effs, sp2) =>
       val loc = mkSL(leftMostSourcePosition(exp), sp2)
       // NB: We only give the innermost expression a real location
@@ -2272,8 +2277,6 @@ object Weeder {
     case "Lazy" => Ast.Annotation.Lazy(ident.loc).toSuccess
     case "LazyWhenPure" => Ast.Annotation.LazyWhenPure(ident.loc).toSuccess
     case "Skip" => Ast.Annotation.Skip(ident.loc).toSuccess
-    case "Space" => Ast.Annotation.Space(ident.loc).toSuccess
-    case "Time" => Ast.Annotation.Time(ident.loc).toSuccess
     case "Unsafe" => Ast.Annotation.Unsafe(ident.loc).toSuccess
     case name => WeederError.UndefinedAnnotation(name, ident.loc).toFailure
   }
@@ -3020,6 +3023,7 @@ object Weeder {
     case ParsedAst.Expression.Cast(e1, _, _, _) => leftMostSourcePosition(e1)
     case ParsedAst.Expression.Mask(sp1, _, _) => sp1
     case ParsedAst.Expression.Upcast(sp1, _, _) => sp1
+    case ParsedAst.Expression.Supercast(sp1, _, _) => sp1
     case ParsedAst.Expression.Without(e1, _, _) => leftMostSourcePosition(e1)
     case ParsedAst.Expression.Do(sp1, _, _, _) => sp1
     case ParsedAst.Expression.Resume(sp1, _, _) => sp1
