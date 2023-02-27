@@ -351,19 +351,6 @@ object GenExpression {
       // Put a Unit value on the stack
       visitor.visitFieldInsn(GETSTATIC, BackendObjType.Unit.jvmName.toInternalName, BackendObjType.Unit.InstanceField.name, BackendObjType.Unit.jvmName.toDescriptor)
 
-    case Expression.Is(sym, exp, loc) =>
-      // Adding source line number for debugging
-      addSourceLine(visitor, loc)
-      // We get the `TagInfo` for the tag
-      val tagInfo = JvmOps.getTagInfo(exp.tpe, sym.name)
-      // We get the JvmType of the class for tag
-      val classType = JvmOps.getTagClassType(tagInfo)
-
-      // First we compile the `exp`
-      compileExpression(exp, visitor, currentClass, lenv0, entryPoint)
-      // We check if the enum is `instanceof` the class
-      visitor.visitTypeInsn(INSTANCEOF, classType.name.toInternalName)
-
     case Expression.Tuple(elms, tpe, loc) =>
       // Adding source line number for debugging
       addSourceLine(visitor, loc)
@@ -408,11 +395,6 @@ object GenExpression {
         // with the store instruction corresponding to the stored element
         visitor.visitInsn(AsmOps.getArrayStoreInstruction(jvmType))
       }
-
-    case Expression.Cast(exp, tpe, loc) =>
-      addSourceLine(visitor, loc)
-      compileExpression(exp, visitor, currentClass, lenv0, entryPoint)
-      AsmOps.castIfNotPrim(visitor, JvmOps.getJvmType(tpe))
 
     case Expression.TryCatch(exp, rules, _, loc) =>
       // Add source line number for debugging.
@@ -564,6 +546,19 @@ object GenExpression {
 
     case Expression.Intrinsic1(op, exp, tpe, loc) => op match {
 
+      case IntrinsicOperator1.Is(sym) =>
+        // Adding source line number for debugging
+        addSourceLine(visitor, loc)
+        // We get the `TagInfo` for the tag
+        val tagInfo = JvmOps.getTagInfo(exp.tpe, sym.name)
+        // We get the JvmType of the class for tag
+        val classType = JvmOps.getTagClassType(tagInfo)
+
+        // First we compile the `exp`
+        compileExpression(exp, visitor, currentClass, lenv0, entryPoint)
+        // We check if the enum is `instanceof` the class
+        visitor.visitTypeInsn(INSTANCEOF, classType.name.toInternalName)
+
       // Normal Tag
       case IntrinsicOperator1.Tag(sym) =>
         // Adding source line number for debugging
@@ -622,6 +617,11 @@ object GenExpression {
         // Invoke `getValue()` method to extract the field of the tag
         visitor.visitMethodInsn(INVOKEVIRTUAL, classType.name.toInternalName, "getValue", methodDescriptor, false)
         // Cast the object to it's type if it's not a primitive
+        AsmOps.castIfNotPrim(visitor, JvmOps.getJvmType(tpe))
+
+      case IntrinsicOperator1.Cast =>
+        addSourceLine(visitor, loc)
+        compileExpression(exp, visitor, currentClass, lenv0, entryPoint)
         AsmOps.castIfNotPrim(visitor, JvmOps.getJvmType(tpe))
 
       case IntrinsicOperator1.Index(idx) =>
