@@ -28,6 +28,8 @@ import ca.uwaterloo.flix.util.{InternalCompilerException, ParOps, Validation}
 
 import java.lang.{Byte => JByte, Integer => JInt, Long => JLong, Short => JShort}
 import java.math.{BigDecimal, BigInteger}
+import java.util.regex.{Pattern => JPattern}
+import java.util.regex.{PatternSyntaxException}
 import scala.annotation.tailrec
 import scala.collection.mutable
 
@@ -41,8 +43,8 @@ object Weeder {
     * Users must not define fields or variables with these names.
     */
   private val ReservedWords = Set(
-    "!=", "&&&", "*", "**", "+", "-", "..", "/", ":", "::", ":::", ":=", "<", "<+>", "<-", "<<<", "<=",
-    "<=>", "==", "=>", ">", ">=", ">>>", "???", "@", "Absent", "Bool", "Impure", "Nil", "Predicate", "Present", "Pure",
+    "!=", "&&&", "*", "**", "+", "-", "..", "/", ":", "::", ":::", ":=", "<", "<+>", "<-", "<=",
+    "<=>", "==", "=>", ">", ">=", "???", "@", "Absent", "Bool", "Impure", "Nil", "Predicate", "Present", "Pure",
     "Read", "RecordRow", "Region", "SchemaRow", "Type", "Write", "^^^", "alias", "case", "catch", "chan",
     "class", "def", "deref", "else", "enum", "false", "fix", "force",
     "if", "import", "inline", "instance", "into", "lat", "law", "lawful", "lazy", "let", "let*", "match",
@@ -218,7 +220,7 @@ object Weeder {
     * Performs weeding on the given def declaration `d0`.
     */
   private def visitDef(d0: ParsedAst.Declaration.Def, legalModifiers: Set[Ast.Modifier], requiresPublic: Boolean)(implicit flix: Flix): Validation[List[WeededAst.Declaration.Def], WeederError] = d0 match {
-    case ParsedAst.Declaration.Def(doc0, ann, mods, sp1, ident, tparams0, fparams0, tpe0, purOrEff, tconstrs0, exp0, sp2) =>
+    case ParsedAst.Declaration.Def(doc0, ann, mods, sp1, ident, tparams0, fparams0, tpe0, purOrEff, tconstrs0, econstrs0, exp0, sp2) =>
       flix.subtask(ident.name, sample = true)
 
       val doc = visitDoc(doc0)
@@ -231,11 +233,12 @@ object Weeder {
       val formalsVal = visitFormalParams(fparams0, Presence.Required)
       val purAndEff = visitPurityAndEffect(purOrEff)
       val tconstrsVal = traverse(tconstrs0)(visitTypeConstraint)
+      val econstrsVal = traverse(econstrs0)(visitEqualityConstraint)
 
-      mapN(annVal, modVal, pubVal, identVal, tparamsVal, formalsVal, expVal, tconstrsVal) {
-        case (as, mod, _, _, tparams, fparams, exp, tconstrs) =>
+      mapN(annVal, modVal, pubVal, identVal, tparamsVal, formalsVal, expVal, tconstrsVal, econstrsVal) {
+        case (as, mod, _, _, tparams, fparams, exp, tconstrs, econstrs) =>
           val tpe = visitType(tpe0)
-          List(WeededAst.Declaration.Def(doc, as, mod, ident, tparams, fparams, exp, tpe, purAndEff, tconstrs, mkSL(sp1, sp2)))
+          List(WeededAst.Declaration.Def(doc, as, mod, ident, tparams, fparams, exp, tpe, purAndEff, tconstrs, econstrs, mkSL(sp1, sp2)))
       }
   }
 
@@ -258,7 +261,8 @@ object Weeder {
           val ts = fs.map(_.tpe.get)
           val purAndEff = WeededAst.PurityAndEffect(None, None)
           val tpe = WeededAst.Type.Ambiguous(Name.mkQName("Bool"), ident.loc)
-          List(WeededAst.Declaration.Def(doc, ann, mod, ident, tparams, fs, exp, tpe, purAndEff, tconstrs, mkSL(sp1, sp2)))
+          val econstrs = Nil // TODO ASSOC-TYPES allow econstrs here
+          List(WeededAst.Declaration.Def(doc, ann, mod, ident, tparams, fs, exp, tpe, purAndEff, tconstrs, econstrs, mkSL(sp1, sp2)))
       }
   }
 
@@ -444,9 +448,18 @@ object Weeder {
       val kind = visitKind(kind0)
       val loc = mkSL(sp1, sp2)
 
-      mapN(modVal, tparamsVal) {
+      flatMapN(modVal, tparamsVal) {
         case (mod, tparams) =>
-          List(WeededAst.Declaration.AssocTypeSig(doc, mod, ident, tparams, kind, loc))
+          val tparamVal = tparams match {
+            case WeededAst.TypeParams.Kinded(hd :: Nil) => hd.toSuccess
+            case WeededAst.TypeParams.Unkinded(hd :: Nil) => hd.toSuccess
+            case WeededAst.TypeParams.Elided => NonUnaryAssocType(0, ident.loc).toFailure
+            case WeededAst.TypeParams.Kinded(ts) => NonUnaryAssocType(ts.length, ident.loc).toFailure
+            case WeededAst.TypeParams.Unkinded(ts) => NonUnaryAssocType(ts.length, ident.loc).toFailure
+          }
+          mapN(tparamVal) {
+            case tparam => List(WeededAst.Declaration.AssocTypeSig(doc, mod, ident, tparam, kind, loc))
+          }
       }
   }
 
@@ -457,13 +470,16 @@ object Weeder {
     case ParsedAst.Declaration.AssocTypeDef(doc0, mod0, sp1, ident, args0, tpe0, sp2) =>
       val doc = visitDoc(doc0)
       val modVal = visitModifiers(mod0, legalModifiers = Set(Ast.Modifier.Public))
-      val args = args0.map(visitType).toList
+      val argVal = args0.map(visitType).toList match {
+        case hd :: Nil => hd.toSuccess
+        case ts => NonUnaryAssocType(ts.length, ident.loc).toFailure
+      }
       val tpe = visitType(tpe0)
       val loc = mkSL(sp1, sp2)
 
-      mapN(modVal) {
-        case mod =>
-          List(WeededAst.Declaration.AssocTypeDef(doc, mod, ident, args, tpe, loc))
+      mapN(modVal, argVal) {
+        case (mod, arg) =>
+          List(WeededAst.Declaration.AssocTypeDef(doc, mod, ident, arg, tpe, loc))
       }
   }
 
@@ -1130,40 +1146,6 @@ object Weeder {
           // Full-blown pattern match.
           val rule = WeededAst.MatchRule(pat, None, body)
           WeededAst.Expression.Match(withAscription(value, tpe), List(rule), loc)
-      }.recoverOne {
-        case err: WeederError => WeededAst.Expression.Error(err)
-      }
-
-    case ParsedAst.Expression.LetMatchStar(sp1, pat, tpe, exp1, exp2, sp2) =>
-      val loc = mkSL(sp1, sp2)
-
-      //
-      // Rewrites a monadic let-match to a regular let-binding or a full-blown pattern match inside a flatMap.
-      //
-      // let* x = exp1; exp2     ==>   flatMap(x -> exp2)(exp1)
-      //
-      val ident = Name.Ident(sp1, "flatMap", sp2)
-      val flatMap = WeededAst.Expression.Ambiguous(Name.mkQName(ident), loc)
-
-      mapN(visitPattern(pat), visitExp(exp1, senv), visitExp(exp2, senv)) {
-        case (WeededAst.Pattern.Var(ident, loc), value, body) =>
-          // No pattern match.
-          val fparam = WeededAst.FormalParam(ident, Ast.Modifiers.Empty, tpe.map(visitType), loc)
-          val lambda = WeededAst.Expression.Lambda(fparam, body, loc)
-          val inner = WeededAst.Expression.Apply(flatMap, List(lambda), loc)
-          WeededAst.Expression.Apply(inner, List(value), loc)
-        case (pat, value, body) =>
-          // Full-blown pattern match.
-          val lambdaIdent = Name.Ident(sp1, "pat" + Flix.Delimiter + flix.genSym.freshId(), sp2)
-          val lambdaVar = WeededAst.Expression.Ambiguous(Name.mkQName(lambdaIdent), loc)
-
-          val rule = WeededAst.MatchRule(pat, None, body)
-          val lambdaBody = WeededAst.Expression.Match(withAscription(lambdaVar, tpe), List(rule), loc)
-
-          val fparam = WeededAst.FormalParam(lambdaIdent, Ast.Modifiers.Empty, tpe.map(visitType), loc)
-          val lambda = WeededAst.Expression.Lambda(fparam, lambdaBody, loc)
-          val inner = WeededAst.Expression.Apply(flatMap, List(lambda), loc)
-          WeededAst.Expression.Apply(inner, List(value), loc)
       }.recoverOne {
         case err: WeederError => WeededAst.Expression.Error(err)
       }
@@ -2202,8 +2184,6 @@ object Weeder {
         case "&&&" => OperatorResult.BuiltIn(Name.mkQName("BitwiseAnd.and", sp1, sp2))
         case "|||" => OperatorResult.BuiltIn(Name.mkQName("BitwiseOr.or", sp1, sp2))
         case "^^^" => OperatorResult.BuiltIn(Name.mkQName("BitwiseXor.xor", sp1, sp2))
-        case "<<<" => OperatorResult.BuiltIn(Name.mkQName("BitwiseShl.shl", sp1, sp2))
-        case ">>>" => OperatorResult.BuiltIn(Name.mkQName("BitwiseShr.shr", sp1, sp2))
         case _ => OperatorResult.Unrecognized(Name.Ident(sp1, op, sp2))
       }
   }
@@ -2284,7 +2264,7 @@ object Weeder {
     visit(chars0.toList, Nil)
   }
 
-  /**
+    /**
     * Performs weeding on the given literal.
     */
   private def weedLiteral(lit0: ParsedAst.Literal)(implicit flix: Flix): Validation[Ast.Constant, WeederError.IllegalLiteral] = lit0 match {
@@ -2350,6 +2330,13 @@ object Weeder {
       weedCharSequence(chars) map {
         string => Ast.Constant.Str(string)
       }
+
+    case ParsedAst.Literal.Regex(sp1, chars, sp2) =>
+      flatMapN(weedCharSequence(chars)) {
+        case string => toRegexPattern(string, mkSL(sp1, sp2)) map {
+            case patt => Ast.Constant.Regex(patt)
+          }
+      }
   }
 
   /**
@@ -2382,6 +2369,7 @@ object Weeder {
       case ParsedAst.Pattern.Lit(sp1, lit, sp2) =>
         flatMapN(weedLiteral(lit): Validation[Ast.Constant, WeederError]) {
           case Ast.Constant.Null => WeederError.IllegalNullPattern(mkSL(sp1, sp2)).toFailure
+          case Ast.Constant.Regex(_) => WeederError.IllegalRegexPattern(mkSL(sp1, sp2)).toFailure
           case l => WeededAst.Pattern.Cst(l, mkSL(sp1, sp2)).toSuccess
         }
 
@@ -2487,14 +2475,14 @@ object Weeder {
           WeededAst.Predicate.Body.Atom(Name.mkPred(ident), Denotation.Latticenal, polarity, fixity, ts ::: t :: Nil, loc)
       }
 
+    case ParsedAst.Predicate.Body.Functional(sp1, idents, exp, sp2) =>
+      mapN(visitExp(exp, senv)) {
+        case e => WeededAst.Predicate.Body.Functional(idents.toList, e, mkSL(sp1, sp2))
+      }
+
     case ParsedAst.Predicate.Body.Guard(sp1, exp, sp2) =>
       mapN(visitExp(exp, senv)) {
         case e => WeededAst.Predicate.Body.Guard(e, mkSL(sp1, sp2))
-      }
-
-    case ParsedAst.Predicate.Body.Loop(sp1, idents, exp, sp2) =>
-      mapN(visitExp(exp, senv)) {
-        case e => WeededAst.Predicate.Body.Loop(idents.toList, e, mkSL(sp1, sp2))
       }
 
   }
@@ -3064,6 +3052,20 @@ object Weeder {
   }
 
   /**
+    * Weeds the given equality constraint `econstr`.
+    */
+  private def visitEqualityConstraint(econstr: ParsedAst.EqualityConstraint): Validation[WeededAst.EqualityConstraint, WeederError] = econstr match {
+    case ParsedAst.EqualityConstraint(sp1, tpe1, tpe2, sp2) =>
+      val t1 = visitType(tpe1)
+      val t2 = visitType(tpe2)
+      val loc = mkSL(sp1, sp2)
+      t1 match {
+        case WeededAst.Type.Apply(WeededAst.Type.Ambiguous(qname, _), t11, _) => WeededAst.EqualityConstraint(qname, t11, t2, loc).toSuccess
+        case _ => WeederError.IllegalEqualityConstraint(loc).toFailure
+      }
+  }
+
+  /**
     * Performs weeding on the given name `ident`.
     */
   private def visitName(ident: Name.Ident): Validation[Unit, WeederError] = {
@@ -3245,6 +3247,16 @@ object Weeder {
   }
 
   /**
+    * Attempts to compile the given regular expression into a Pattern.
+    */
+  private def toRegexPattern(regex: String, loc: SourceLocation): Validation[JPattern, WeederError.InvalidRegularExpression] = try {
+    var patt = JPattern.compile(regex)
+    patt.toSuccess
+  } catch {
+    case ex: PatternSyntaxException => WeederError.InvalidRegularExpression(regex, ex.getMessage, loc).toFailure
+  }
+
+  /**
     * Alias for SourceLocation.mk
     */
   private def mkSL(sp1: SourcePosition, sp2: SourcePosition): SourceLocation = SourceLocation.mk(sp1, sp2)
@@ -3276,7 +3288,6 @@ object Weeder {
     case ParsedAst.Expression.MonadicFor(sp1, _, _, _) => sp1
     case ParsedAst.Expression.ForEachYield(sp1, _, _, _) => sp1
     case ParsedAst.Expression.LetMatch(sp1, _, _, _, _, _, _) => sp1
-    case ParsedAst.Expression.LetMatchStar(sp1, _, _, _, _, _) => sp1
     case ParsedAst.Expression.LetRecDef(sp1, _, _, _, _, _, _) => sp1
     case ParsedAst.Expression.LetImport(sp1, _, _, _) => sp1
     case ParsedAst.Expression.NewObject(sp1, _, _, _) => sp1

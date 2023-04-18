@@ -156,7 +156,7 @@ object Documentor {
         ("namespaces" -> namespacesSorted) ~
         ("classes" -> classesByNS) ~
         ("enums" -> enumsByNS) ~
-        ("restrictableEnums" -> restrictableEnumsByNS)
+        ("restrictableEnums" -> restrictableEnumsByNS) ~
         ("typeAliases" -> typeAliasesByNS) ~
         ("defs" -> defsByNS)
 
@@ -250,7 +250,7 @@ object Documentor {
       ("fparams" -> defn0.spec.fparams.map(visitFormalParam)) ~
       ("tpe" -> FormatType.formatType(defn0.spec.retTpe)) ~
       ("eff" -> FormatType.formatType(defn0.spec.pur)) ~ // TODO change JSON name to `pur`
-      ("tcs" -> defn0.spec.declaredScheme.constraints.map(visitTypeConstraint)) ~
+      ("tcs" -> defn0.spec.declaredScheme.tconstrs.map(visitTypeConstraint)) ~
       ("loc" -> visitSourceLocation(defn0.spec.loc))
   }
 
@@ -410,7 +410,7 @@ object Documentor {
         ("fparams" -> spec.fparams.map(visitFormalParam)) ~
         ("tpe" -> visitType(spec.retTpe)) ~
         ("eff" -> visitType(spec.pur)) ~ // TODO change JSON to `pur`
-        ("tcs" -> spec.declaredScheme.constraints.map(visitTypeConstraint)) ~
+        ("tcs" -> spec.declaredScheme.tconstrs.map(visitTypeConstraint)) ~
         ("loc" -> visitSourceLocation(spec.loc))
   }
 

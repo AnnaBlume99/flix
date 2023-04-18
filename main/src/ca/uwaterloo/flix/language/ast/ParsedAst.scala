@@ -77,9 +77,10 @@ object ParsedAst {
       * @param purAndEff  the declared purity.
       * @param exp        the expression.
       * @param tconstrs   the type constraints.
+      * @param econstrs   the equality constraints.
       * @param sp2        the position of the last character in the declaration.
       */
-    case class Def(doc: ParsedAst.Doc, ann: Seq[ParsedAst.Annotation], mod: Seq[ParsedAst.Modifier], sp1: SourcePosition, ident: Name.Ident, tparams: ParsedAst.TypeParams, fparamsOpt: Seq[ParsedAst.FormalParam], tpe: ParsedAst.Type, purAndEff: ParsedAst.PurityAndEffect, tconstrs: Seq[ParsedAst.TypeConstraint], exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Declaration
+    case class Def(doc: ParsedAst.Doc, ann: Seq[ParsedAst.Annotation], mod: Seq[ParsedAst.Modifier], sp1: SourcePosition, ident: Name.Ident, tparams: ParsedAst.TypeParams, fparamsOpt: Seq[ParsedAst.FormalParam], tpe: ParsedAst.Type, purAndEff: ParsedAst.PurityAndEffect, tconstrs: Seq[ParsedAst.TypeConstraint], econstrs: Seq[ParsedAst.EqualityConstraint], exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Declaration
 
     /**
       * Signature Declaration.
@@ -523,6 +524,16 @@ object ParsedAst {
       * @param sp2   the position of the last character in the literal.
       */
     case class Str(sp1: SourcePosition, chars: Seq[ParsedAst.CharCode], sp2: SourcePosition) extends ParsedAst.Literal
+
+    /**
+      * Regex Pattern Literal.
+      *
+      * @param sp1   the position of the first character in the literal.
+      * @param chars the regular expression pattern
+      * @param sp2   the position of the last character in the literal.
+      */
+    case class Regex(sp1: SourcePosition, chars: Seq[ParsedAst.CharCode], sp2: SourcePosition) extends ParsedAst.Literal
+
   }
 
   /**
@@ -708,18 +719,6 @@ object ParsedAst {
       * @param sp2  the position of the last character in the expression.
       */
     case class LetMatch(sp1: SourcePosition, mod: Seq[ParsedAst.Modifier], pat: ParsedAst.Pattern, tpe: Option[ParsedAst.Type], exp1: ParsedAst.Expression, exp2: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
-
-    /**
-      * LetMatchStar Expression (monadic let-binding with pattern match).
-      *
-      * @param sp1  the position of the first character in the expression.
-      * @param pat  the match pattern.
-      * @param tpe  the optional type annotation.
-      * @param exp1 the value expression.
-      * @param exp2 the body expression.
-      * @param sp2  the position of the last character in the expression.
-      */
-    case class LetMatchStar(sp1: SourcePosition, pat: ParsedAst.Pattern, tpe: Option[ParsedAst.Type], exp1: ParsedAst.Expression, exp2: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Expression
 
     /**
       * LetRecDef Expression (let rec using def keyword).
@@ -1380,6 +1379,16 @@ object ParsedAst {
       case class Atom(sp1: SourcePosition, polarity: Ast.Polarity, fixity: Ast.Fixity, ident: Name.Ident, terms: Seq[ParsedAst.Pattern], term: Option[ParsedAst.Pattern], sp2: SourcePosition) extends ParsedAst.Predicate.Body
 
       /**
+        * Functional Predicate.
+        *
+        * @param sp1    the position of the first character in the predicate.
+        * @param idents the out variables of the predicate.
+        * @param exp    the expression to iterate over.
+        * @param sp2    the position of the last character in the predicate.
+        */
+      case class Functional(sp1: SourcePosition, idents: Seq[Name.Ident], exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Predicate.Body
+
+      /**
         * Guard Predicate.
         *
         * @param sp1 the position of the first character in the predicate.
@@ -1387,16 +1396,6 @@ object ParsedAst {
         * @param sp2 the position of the last character in the predicate.
         */
       case class Guard(sp1: SourcePosition, exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Predicate.Body
-
-      /**
-        * Loop Predicate.
-        *
-        * @param sp1    the position of the first character in the predicate.
-        * @param idents the variable bound by the predicate.
-        * @param exp    the expression to iterate over.
-        * @param sp2    the position of the last character in the predicate.
-        */
-      case class Loop(sp1: SourcePosition, idents: Seq[Name.Ident], exp: ParsedAst.Expression, sp2: SourcePosition) extends ParsedAst.Predicate.Body
 
     }
 
@@ -1893,6 +1892,16 @@ object ParsedAst {
     * @param sp2    the position of the last character in the type constraint.
     */
   case class TypeConstraint(sp1: SourcePosition, clazz: Name.QName, tparam: ParsedAst.Type, sp2: SourcePosition)
+
+  /**
+    * An equality constraint.
+    *
+    * @param sp1  the source position of the first character in the equality constraint.
+    * @param tpe1 the first type.
+    * @param tpe2 the second type.
+    * @param sp2  the source position of the last character in the equality constraint.
+    */
+  case class EqualityConstraint(sp1: SourcePosition, tpe1: Type, tpe2: Type, sp2: SourcePosition)
 
   /**
     * Formal Parameter.
